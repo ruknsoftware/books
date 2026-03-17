@@ -59,3 +59,15 @@ export const defaultSyncConfigProvider: SyncConfigProvider = {
     ];
   },
 };
+
+let syncConfigProvider: SyncConfigProvider | null = null;
+
+/** Returns the current sync config provider, or the default if none was set. */
+export function getSyncConfigProvider(): SyncConfigProvider {
+  return syncConfigProvider ?? defaultSyncConfigProvider;
+}
+
+/** Sets the sync config provider (e.g. extended provider from optional package). Pass null to reset to default. */
+export function setSyncConfigProvider(provider: SyncConfigProvider | null): void {
+  syncConfigProvider = provider;
+}
