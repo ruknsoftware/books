@@ -89,8 +89,11 @@ export const syncConfigRegistrationReady: Promise<void> = import(
   'books-erpnext-sync-extended'
 )
   .then((ext) => {
-    if (ext?.getExtendedSyncConfigProvider) {
-      setSyncConfigProvider(ext.getExtendedSyncConfigProvider());
+    const providerFactory =
+      ext?.getExtendedSyncConfigProvider ??
+      (ext as any)?.default?.getExtendedSyncConfigProvider;
+    if (providerFactory) {
+      setSyncConfigProvider(providerFactory());
     }
   })
   .catch(() => {
