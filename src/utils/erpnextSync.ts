@@ -1,5 +1,6 @@
 import { Fyo } from 'fyo';
 import { sendAPIRequest } from './api';
+import { getSyncConfigProvider } from './syncConfigProvider';
 import { ModelNameEnum } from 'models/types';
 import { ERPNextSyncSettings } from 'models/baseModels/ERPNextSyncSettings/ERPNextSyncSettings';
 import { DocValueMap } from 'fyo/core/types';
@@ -584,16 +585,7 @@ export async function performInitialFullSync(fyo: Fyo) {
     return;
   }
 
-  const processOrder = [
-    ModelNameEnum.UOM,
-    ModelNameEnum.ItemGroup,
-    ModelNameEnum.Party,
-    ModelNameEnum.Address,
-    ModelNameEnum.Item,
-    ModelNameEnum.PriceList,
-    ModelNameEnum.PricingRule,
-    ModelNameEnum.Batch,
-  ];
+  const processOrder = getSyncConfigProvider().getInitialSyncProcessOrder();
 
   const docsByType: Record<string, DocValueMap[]> = {};
   for (const doc of allDocs) {
@@ -894,19 +886,9 @@ async function afterDocSync(
 }
 
 export function getShouldDocSyncToERPNext(doc: Doc): boolean {
-  const syncableModels = [
-    ModelNameEnum.SalesInvoice,
-    ModelNameEnum.Payment,
-    ModelNameEnum.Shipment,
-    ModelNameEnum.POSOpeningShift,
-    ModelNameEnum.POSClosingShift,
-  ] as string[];
-
-  if (syncableModels.includes(doc.schemaName)) {
-    return true;
-  }
-
-  return false;
+  return getSyncConfigProvider()
+    .getPushSyncableDoctypes()
+    .includes(doc.schemaName);
 }
 
 function changeDocDataType(
@@ -974,19 +956,9 @@ function checkDocDataTypes(
 }
 
 function isValidSyncableDocName(doctype: string): boolean {
-  const syncableDocNames = [
-    ModelNameEnum.Item,
-    ModelNameEnum.ItemGroup,
-    ModelNameEnum.Batch,
-    ModelNameEnum.PricingRule,
-    ModelNameEnum.PriceList,
-  ] as string[];
-
-  if (syncableDocNames.includes(doctype)) {
-    return true;
-  }
-
-  return false;
+  return getSyncConfigProvider()
+    .getFetchSyncableDoctypes()
+    .includes(doctype);
 }
 
 function getDocTypeName(doc: DocValueMap | Doc): string {
