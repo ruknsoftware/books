@@ -5,6 +5,7 @@
  */
 import type { Fyo } from 'fyo';
 import type { DocValueMap } from 'fyo/core/types';
+import { ModelNameEnum } from 'models/types';
 
 export interface SyncConfigProvider {
   /** Doctypes that are pushed from Books to ERPNext (e.g. SalesInvoice, Payment, Shipment). */
@@ -22,3 +23,39 @@ export interface SyncConfigProvider {
    */
   preSync?(fyo: Fyo, doc: DocValueMap): Promise<void> | void;
 }
+
+/** Default provider: current 5 push doctypes, current fetch list, current initial sync order. No preSync. */
+export const defaultSyncConfigProvider: SyncConfigProvider = {
+  getPushSyncableDoctypes(): string[] {
+    return [
+      ModelNameEnum.SalesInvoice,
+      ModelNameEnum.Payment,
+      ModelNameEnum.Shipment,
+      ModelNameEnum.POSOpeningShift,
+      ModelNameEnum.POSClosingShift,
+    ];
+  },
+
+  getFetchSyncableDoctypes(): string[] {
+    return [
+      ModelNameEnum.Item,
+      ModelNameEnum.ItemGroup,
+      ModelNameEnum.Batch,
+      ModelNameEnum.PricingRule,
+      ModelNameEnum.PriceList,
+    ];
+  },
+
+  getInitialSyncProcessOrder(): string[] {
+    return [
+      ModelNameEnum.UOM,
+      ModelNameEnum.ItemGroup,
+      ModelNameEnum.Party,
+      ModelNameEnum.Address,
+      ModelNameEnum.Item,
+      ModelNameEnum.PriceList,
+      ModelNameEnum.PricingRule,
+      ModelNameEnum.Batch,
+    ];
+  },
+};
