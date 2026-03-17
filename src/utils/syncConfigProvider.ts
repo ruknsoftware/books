@@ -19,9 +19,21 @@ export interface SyncConfigProvider {
 
   /**
    * Optional hook run before syncing a document (create/update from ERPNext).
-   * Use to ensure dependencies exist or are queued (e.g. add to FetchFromERPNextQueue).
+   * Use context.addToFetchFromERPNextQueue to queue missing dependencies.
    */
-  preSync?(fyo: Fyo, doc: DocValueMap): Promise<void> | void;
+  preSync?(
+    fyo: Fyo,
+    doc: DocValueMap,
+    context?: SyncPreSyncContext
+  ): Promise<void> | void;
+}
+
+/** Passed to provider.preSync so extensions can queue dependency fetches. */
+export interface SyncPreSyncContext {
+  addToFetchFromERPNextQueue(
+    fyo: Fyo,
+    data: { referenceType: string; documentName: string }
+  ): Promise<void>;
 }
 
 /** Default provider: current 5 push doctypes, current fetch list, current initial sync order. No preSync. */

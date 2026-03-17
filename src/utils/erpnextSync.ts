@@ -390,7 +390,7 @@ async function appendDocValues(newDoc: DocValueMap, doc: DocValueMap) {
 async function performPreSync(fyo: Fyo, doc: DocValueMap) {
   const provider = getSyncConfigProvider();
   if (provider.preSync) {
-    await provider.preSync(fyo, doc);
+    await provider.preSync(fyo, doc, { addToFetchFromERPNextQueue });
     return;
   }
 
