@@ -388,6 +388,12 @@ async function appendDocValues(newDoc: DocValueMap, doc: DocValueMap) {
 }
 
 async function performPreSync(fyo: Fyo, doc: DocValueMap) {
+  const provider = getSyncConfigProvider();
+  if (provider.preSync) {
+    await provider.preSync(fyo, doc);
+    return;
+  }
+
   const initialSyncData =
     fyo.singles.ERPNextSyncSettings?.initialSyncData ?? true;
   const isInitialSync = !initialSyncData;
