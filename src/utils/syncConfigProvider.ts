@@ -83,3 +83,16 @@ export function getSyncConfigProvider(): SyncConfigProvider {
 export function setSyncConfigProvider(provider: SyncConfigProvider | null): void {
   syncConfigProvider = provider;
 }
+
+/** Resolves when the optional extended provider has been registered (or attempted). Await before getSyncConfigProvider() in scripts/tests to see extended provider when installed. */
+export const syncConfigRegistrationReady: Promise<void> = import(
+  'books-erpnext-sync-extended'
+)
+  .then((ext) => {
+    if (ext?.getExtendedSyncConfigProvider) {
+      setSyncConfigProvider(ext.getExtendedSyncConfigProvider());
+    }
+  })
+  .catch(() => {
+    // Extension not installed; keep default provider
+  });

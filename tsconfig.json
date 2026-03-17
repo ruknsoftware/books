@@ -29,7 +29,11 @@
     "lib": ["esnext", "dom", "dom.iterable", "scripthost"]
   },
   "ts-node": {
-    "files": true
+    "files": true,
+    "compilerOptions": {
+      "module": "commonjs",
+      "moduleResolution": "node"
+    }
   },
   "include": [
     "src/**/*.ts",
