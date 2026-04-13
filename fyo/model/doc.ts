@@ -48,6 +48,12 @@ import { getShouldDocSyncToERPNext } from 'src/utils/erpnextSync';
 import { ModelNameEnum } from 'models/types';
 import { DocItem } from 'models/inventory/types';
 
+/**
+ * ERP-related fields not copied on duplicate: invoice ERP push flag (see Doc.sync)
+ * and Item ERP-origin flag for extended sync.
+ */
+const DUPLICATE_STRIP_FIELDS = ['isSyncedWithErp', 'datafromErp'] as const;
+
 export class Doc extends Observable<DocValue | Doc[]> {
   /* eslint-disable @typescript-eslint/no-floating-promises */
   name?: string;
@@ -1105,6 +1111,11 @@ export class Doc extends Observable<DocValue | Doc[]> {
       delete updateMap.name;
     } else {
       updateMap.name = String(updateMap.name) + ' CPY';
+    }
+
+    const stripMap = updateMap as Record<string, unknown>;
+    for (const field of DUPLICATE_STRIP_FIELDS) {
+      delete stripMap[field];
     }
 
     const rawUpdateMap = this.fyo.db.converter.toRawValueMap(
