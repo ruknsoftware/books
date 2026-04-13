@@ -2,7 +2,7 @@ import Check from './check.vue';
 import CommonEntries from './common-entries.vue';
 import Customer from './customer.vue';
 import Dashboard from './dashboard.vue';
-import Fb from './fb.vue';
+import Rukn from './rukn.vue';
 import General from './general.vue';
 import Gst from './gst.vue';
 import Inventory from './inventory.vue';
@@ -30,7 +30,7 @@ export default {
   'common-entries': CommonEntries,
   'customer': Customer,
   'dashboard': Dashboard,
-  'fb': Fb,
+  'rukn': Rukn,
   'general': General,
   'gst': Gst,
   'inventory': Inventory,

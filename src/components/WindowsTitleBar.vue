@@ -14,7 +14,7 @@
     "
     style="height: 28px"
   >
-    <Fb class="ms-2" />
+    <Rukn class="ms-2" />
     <p v-if="companyName && dbPath" class="mx-auto text-sm">
       {{ companyName }} - {{ dbPath }}
     </p>
@@ -64,11 +64,11 @@
 </template>
 
 <script>
-import Fb from './Icons/18/fb.vue';
+import Rukn from './Icons/18/rukn.vue';
 
 export default {
   name: 'WindowsTitleBar',
-  components: { Fb },
+  components: { Rukn },
   props: {
     dbPath: String,
     companyName: String,

@@ -34,7 +34,7 @@ const frappeBooksConfig = {
     type: 'distribution',
     artifactName: '${productName}-v${version}-mac-${arch}.${ext}',
     category: 'public.app-category.finance',
-    icon: 'build/icon.icns',
+    icon: 'build/icon.png',
     notarize: {
       teamId: process.env.APPLE_TEAM_ID || '',
     },
@@ -66,8 +66,8 @@ const frappeBooksConfig = {
     oneClick: false,
     perMachine: false,
     allowToChangeInstallationDirectory: true,
-    installerIcon: 'build/installericon.ico',
-    uninstallerIcon: 'build/uninstallericon.ico',
+    installerIcon: 'build/installerIcon.ico',
+    uninstallerIcon: 'build/uninstallerIcon.ico',
     publish: ['github'],
   },
   linux: {
