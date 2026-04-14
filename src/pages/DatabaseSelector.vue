@@ -539,6 +539,22 @@ export default defineComponent({
         });
         return;
       }
+      const getERPNextCompanyTemplate = mod
+        ?.getERPNextCompanyTemplate as
+        | undefined
+        | ((params: {
+            baseURL: string;
+            token: string;
+            company: string;
+          }) => Promise<{
+            company: { name: string };
+            meta?: {
+              accounts_parent_first?: boolean;
+              accounts_parent_first_violations?: number;
+              accounts_count?: number;
+            };
+            accounts: Array<unknown>;
+          }>);
 
       let companies: Array<{ name: string }> = [];
       try {
@@ -587,10 +603,59 @@ export default defineComponent({
         return;
       }
 
+      if (!getERPNextCompanyTemplate) {
+        await showDialog({
+          title: this.t`ERPNext template import not available`,
+          detail: this.t`Please update/install books-erpnext-sync-extended.`,
+          type: 'info',
+        });
+        return;
+      }
+
+      let template:
+        | {
+            company: { name: string };
+            meta?: {
+              accounts_parent_first?: boolean;
+              accounts_parent_first_violations?: number;
+              accounts_count?: number;
+            };
+            accounts: Array<unknown>;
+          }
+        | undefined;
+      try {
+        template = await getERPNextCompanyTemplate({
+          baseURL,
+          token,
+          company: picked,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await showDialog({
+          title: this.t`Failed to fetch company template`,
+          detail: message,
+          type: 'error',
+        });
+        return;
+      }
+
+      const meta = template?.meta ?? {};
+      const accountsCount =
+        meta.accounts_count ?? template?.accounts?.length ?? 0;
+      const parentFirst = meta.accounts_parent_first;
+      const violations = meta.accounts_parent_first_violations ?? 0;
+
       await showDialog({
-        title: this.t`Next step`,
-        detail: this.t`We’ll import ${picked} after wiring the local DB bootstrap.`,
-        type: 'info',
+        title: this.t`Template fetched`,
+        detail: [
+          this.t`Company: ${picked}`,
+          this.t`Accounts: ${accountsCount}`,
+          typeof parentFirst === 'boolean'
+            ? this.t`Parent-first order: ${parentFirst ? 'Yes' : 'No'}`
+            : this.t`Parent-first order: Unknown`,
+          violations ? this.t`Order violations: ${violations}` : this.t``,
+        ].filter(Boolean),
+        type: parentFirst === false ? 'warning' : 'success',
       });
     },
     async existingDatabase() {
