@@ -353,6 +353,7 @@ import { setupDummyInstance } from 'dummy';
 import { t } from 'fyo';
 import { Verb } from 'fyo/telemetry/types';
 import { DateTime } from 'luxon';
+import { ModelNameEnum } from 'models/types';
 import Button from 'src/components/Button.vue';
 import LanguageSelector from 'src/components/Controls/LanguageSelector.vue';
 import FeatherIcon from 'src/components/FeatherIcon.vue';
@@ -409,10 +410,11 @@ export default defineComponent({
     async checkERPNextImportAvailability() {
       try {
         const ext = await import('books-erpnext-sync-extended');
+        const mod = (ext as any)?.default ?? ext;
         const hasExports =
-          typeof (ext as any)?.getERPNextCompanies === 'function' ||
-          typeof (ext as any)?.getERPNextCompanyTemplate === 'function' ||
-          typeof (ext as any)?.createLocalCompanyFromTemplate === 'function';
+          typeof mod?.getERPNextCompanies === 'function' ||
+          typeof mod?.getERPNextCompanyTemplate === 'function' ||
+          typeof mod?.createLocalCompanyFromTemplate === 'function';
         this.erpnextImportAvailable = !!hasExports;
       } catch {
         this.erpnextImportAvailable = false;
@@ -505,9 +507,89 @@ export default defineComponent({
         return;
       }
 
+      const syncSettingsDoc = await this.fyo.doc.getDoc(
+        ModelNameEnum.ERPNextSyncSettings
+      );
+      const baseURL = syncSettingsDoc.get('baseURL') as string | undefined;
+      const token = syncSettingsDoc.get('authToken') as string | undefined;
+
+      if (!baseURL || !token) {
+        await showDialog({
+          title: this.t`ERPNext Sync is not configured`,
+          detail: this.t`Go to Settings → ERPNext Sync and set API Base URL and Auth Token.`,
+          type: 'warning',
+        });
+        return;
+      }
+
+      const ext = await import('books-erpnext-sync-extended');
+      const mod = (ext as any)?.default ?? ext;
+      const getERPNextCompanies = mod
+        ?.getERPNextCompanies as
+        | undefined
+        | ((params: { baseURL: string; token: string }) => Promise<
+            Array<{ name: string }>
+          >);
+
+      if (!getERPNextCompanies) {
+        await showDialog({
+          title: this.t`ERPNext import not available`,
+          detail: this.t`Please update/install books-erpnext-sync-extended.`,
+          type: 'info',
+        });
+        return;
+      }
+
+      let companies: Array<{ name: string }> = [];
+      try {
+        companies = await getERPNextCompanies({ baseURL, token });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await showDialog({
+          title: this.t`Failed to fetch companies`,
+          detail: message,
+          type: 'error',
+        });
+        return;
+      }
+
+      if (!companies.length) {
+        await showDialog({
+          title: this.t`No companies found`,
+          detail: this.t`The ERPNext user for this token cannot read any Company.`,
+          type: 'info',
+        });
+        return;
+      }
+
+      const maxButtons = 6;
+      const picked = (await showDialog({
+        title: this.t`Select ERPNext Company`,
+        detail:
+          companies.length > maxButtons
+            ? this.t`Showing first ${maxButtons} companies.`
+            : undefined,
+        type: 'info',
+        buttons: [
+          ...companies.slice(0, maxButtons).map((c) => ({
+            label: c.name,
+            action: () => c.name,
+          })),
+          {
+            label: this.t`Cancel`,
+            action: () => null,
+            isEscape: true,
+          },
+        ],
+      })) as string | null;
+
+      if (!picked) {
+        return;
+      }
+
       await showDialog({
-        title: this.t`Coming soon`,
-        detail: this.t`Next we’ll add the company picker and import flow.`,
+        title: this.t`Next step`,
+        detail: this.t`We’ll import ${picked} after wiring the local DB bootstrap.`,
         type: 'info',
       });
     },
