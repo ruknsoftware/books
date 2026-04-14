@@ -61,6 +61,48 @@
         </div>
       </div>
 
+      <!-- From ERPNext Company (Purple Icon) -->
+      <div
+        v-if="erpnextImportAvailable"
+        data-testid="create-from-erpnext-company"
+        class="px-4 h-row-largest flex flex-row items-center gap-4 p-2"
+        :class="
+          creatingDemo
+            ? ''
+            : 'hover:bg-gray-50 dark:hover:bg-gray-890 cursor-pointer'
+        "
+        @click="fromERPNextCompany"
+      >
+        <div
+          class="w-8 h-8 rounded-full relative flex-center"
+          :class="
+            erpnextImportAvailable
+              ? 'bg-purple-500'
+              : 'bg-gray-300 dark:bg-gray-800'
+          "
+        >
+          <feather-icon
+            name="refresh-ccw"
+            class="w-4 h-4"
+            :class="
+              erpnextImportAvailable
+                ? 'text-white dark:text-gray-900'
+                : 'text-gray-600 dark:text-gray-400'
+            "
+          />
+        </div>
+        <div class="w-full">
+          <p class="font-medium dark:text-gray-200">
+            {{ t`From ERPNext Company` }}
+          </p>
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            {{
+              t`Create a new company by importing chart of accounts and defaults from ERPNext`
+            }}
+          </p>
+        </div>
+      </div>
+
       <!-- Existing File (Green Icon) -->
       <div
         class="px-4 h-row-largest flex flex-row items-center gap-4 p-2"
@@ -336,6 +378,7 @@ export default defineComponent({
   data() {
     return {
       openModal: false,
+      erpnextImportAvailable: false,
       baseCount: 100,
       creationMessage: '',
       creationPercent: 0,
@@ -344,6 +387,7 @@ export default defineComponent({
       files: [],
     } as {
       openModal: boolean;
+      erpnextImportAvailable: boolean;
       baseCount: number;
       creationMessage: string;
       creationPercent: number;
@@ -354,6 +398,7 @@ export default defineComponent({
   },
   async mounted() {
     await this.setFiles();
+    await this.checkERPNextImportAvailability();
 
     if (fyo.store.isDevelopment) {
       // @ts-ignore
@@ -361,6 +406,18 @@ export default defineComponent({
     }
   },
   methods: {
+    async checkERPNextImportAvailability() {
+      try {
+        const ext = await import('books-erpnext-sync-extended');
+        const hasExports =
+          typeof (ext as any)?.getERPNextCompanies === 'function' ||
+          typeof (ext as any)?.getERPNextCompanyTemplate === 'function' ||
+          typeof (ext as any)?.createLocalCompanyFromTemplate === 'function';
+        this.erpnextImportAvailable = !!hasExports;
+      } catch {
+        this.erpnextImportAvailable = false;
+      }
+    },
     truncate(value: string) {
       if (value.length < 72) {
         return value;
@@ -442,6 +499,17 @@ export default defineComponent({
       }
 
       this.$emit('new-database');
+    },
+    async fromERPNextCompany() {
+      if (this.creatingDemo) {
+        return;
+      }
+
+      await showDialog({
+        title: this.t`Coming soon`,
+        detail: this.t`Next we’ll add the company picker and import flow.`,
+        type: 'info',
+      });
     },
     async existingDatabase() {
       if (this.creatingDemo) {
