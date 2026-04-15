@@ -580,10 +580,41 @@ import Row from 'src/components/Row.vue';
 import { fyo } from 'src/initFyo';
 import { showDialog } from 'src/utils/interactive';
 import { sendAPIRequest } from 'src/utils/api';
+import { setupInstanceFromERPNextTemplate } from 'src/setup/setupInstance';
 import { updateConfigFiles } from 'src/utils/misc';
 import { deleteDb, getSavePath, getSelectedFilePath } from 'src/utils/ui';
 import type { ConfigFilesWithModified } from 'utils/types';
 import { defineComponent } from 'vue';
+
+/** Shape of get_company_template payload while pending local DB creation. */
+type ERPNextImportPendingTemplate = {
+  company: {
+    name: string;
+    abbr?: string;
+    company_name?: string;
+    country?: string;
+    default_currency?: string;
+    time_zone?: string;
+  };
+  defaults?: Record<string, unknown>;
+  fiscal_year?: {
+    name?: string;
+    year_start_date?: string;
+    year_end_date?: string;
+  } | null;
+  meta?: {
+    accounts_parent_first?: boolean;
+    accounts_parent_first_violations?: number;
+    accounts_count?: number;
+  };
+  accounts: Array<{
+    name: string;
+    parent_account?: string | null;
+    is_group?: number | boolean;
+    root_type?: string;
+    account_type?: string;
+  }>;
+};
 
 type ERPNextCompanyPickerRow = {
   name: string;
@@ -591,6 +622,14 @@ type ERPNextCompanyPickerRow = {
   default_currency?: string;
   country?: string;
 };
+
+function slugForDbFile(name: string): string {
+  const s = name
+    .trim()
+    .replace(/[^a-zA-Z0-9-_]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return s || 'company';
+}
 
 export default defineComponent({
   name: 'DatabaseSelector',
@@ -621,6 +660,7 @@ export default defineComponent({
       erpnextPickerSelectedName: '',
       erpnextPickerBaseURL: '',
       erpnextPickerToken: '',
+      erpnextImportPendingTemplate: null as ERPNextImportPendingTemplate | null,
     } as {
       openModal: boolean;
       erpnextImportAvailable: boolean;
@@ -638,6 +678,7 @@ export default defineComponent({
       erpnextPickerSelectedName: string;
       erpnextPickerBaseURL: string;
       erpnextPickerToken: string;
+      erpnextImportPendingTemplate: ERPNextImportPendingTemplate | null;
     };
   },
   async mounted() {
@@ -950,7 +991,10 @@ export default defineComponent({
       const parentFirst = meta.accounts_parent_first;
       const violations = meta.accounts_parent_first_violations ?? 0;
 
-      await showDialog({
+      this.erpnextImportPendingTemplate =
+        template as ERPNextImportPendingTemplate;
+
+      const createLocal = await showDialog({
         title: this.t`Template fetched`,
         detail: [
           this.t`Company: ${picked}`,
@@ -961,7 +1005,71 @@ export default defineComponent({
           violations ? this.t`Order violations: ${violations}` : this.t``,
         ].filter(Boolean),
         type: parentFirst === false ? 'warning' : 'success',
+        buttons: [
+          {
+            label: this.t`Create company file`,
+            action: () => true,
+            isPrimary: true,
+          },
+          {
+            label: this.t`Done`,
+            action: () => false,
+            isEscape: true,
+          },
+        ],
       });
+
+      if (createLocal) {
+        await this.runCreateDatabaseFromERPNextTemplate();
+      } else {
+        this.erpnextImportPendingTemplate = null;
+      }
+    },
+    async runCreateDatabaseFromERPNextTemplate() {
+      const template = this.erpnextImportPendingTemplate;
+      if (!template?.company || !template.accounts?.length) {
+        await showDialog({
+          title: this.t`Nothing to import`,
+          type: 'warning',
+          detail: this.t`The ERPNext template was missing data. Fetch the template again.`,
+        });
+        return;
+      }
+
+      const slug = slugForDbFile(
+        template.company.company_name || template.company.name || 'company'
+      );
+      const { filePath, canceled } = await getSavePath(slug, 'db');
+      if (canceled || !filePath) {
+        return;
+      }
+
+      this.creatingDemo = true;
+      this.creationMessage = this.t`Creating company from ERPNext…`;
+      this.creationPercent = 0;
+
+      try {
+        await setupInstanceFromERPNextTemplate(filePath, template, fyo);
+        updateConfigFiles(fyo);
+        await fyo.purgeCache();
+        this.erpnextImportPendingTemplate = null;
+        this.$emit('file-selected', filePath);
+      } catch (error) {
+        if (this.fyo.store.isDevelopment) {
+          // eslint-disable-next-line no-console
+          console.error('ERPNext import: create local company failed', error);
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        await showDialog({
+          title: this.t`Could not create company`,
+          detail: message,
+          type: 'error',
+        });
+      } finally {
+        this.creatingDemo = false;
+        this.creationPercent = 0;
+        this.creationMessage = '';
+      }
     },
     async existingDatabase() {
       if (this.creatingDemo) {

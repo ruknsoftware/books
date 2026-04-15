@@ -1,6 +1,7 @@
 import { Fyo } from 'fyo';
 import { DocValueMap } from 'fyo/core/types';
 import { Doc } from 'fyo/model/doc';
+import { DateTime } from 'luxon';
 import { createNumberSeries } from 'fyo/model/naming';
 import {
   DEFAULT_CURRENCY,
@@ -380,4 +381,262 @@ async function updateInventorySettings(fyo: Fyo) {
   }
 
   await inventorySettings.sync();
+}
+
+function normalizeErpnextRootType(raw: string | undefined | null): string {
+  if (raw == null || raw === '') {
+    return AccountRootTypeEnum.Asset;
+  }
+  const t = String(raw).trim();
+  if ((Object.values(AccountRootTypeEnum) as string[]).includes(t)) {
+    return t;
+  }
+  const titled =
+    t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+  if ((Object.values(AccountRootTypeEnum) as string[]).includes(titled)) {
+    return titled;
+  }
+  return AccountRootTypeEnum.Asset;
+}
+
+function normalizeErpnextAccountType(raw: string | undefined | null): string {
+  if (raw == null || raw === '') {
+    return '';
+  }
+  const t = String(raw).trim();
+  if ((Object.values(AccountTypeEnum) as string[]).includes(t)) {
+    return t;
+  }
+  return '';
+}
+
+function findFirstBankAccountName(
+  accounts: Array<{ name: string; account_type?: string | null }>
+): string | null {
+  for (const row of accounts) {
+    if (String(row.account_type ?? '').trim() === AccountTypeEnum.Bank) {
+      return row.name;
+    }
+  }
+  return null;
+}
+
+function erpDateToIsoForBooks(value: unknown): string | null {
+  if (value == null) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return DateTime.fromJSDate(value).toISODate();
+  }
+  const s = String(value).trim();
+  if (!s) {
+    return null;
+  }
+  const d = DateTime.fromISO(s.slice(0, 10));
+  return d.isValid ? d.toISODate() : null;
+}
+
+/** Apply Company write-off / round-off / discount from ERPNext after COA exists. */
+async function applyErpnextCompanyDefaultAccounts(
+  fyo: Fyo,
+  defaults?: Record<string, unknown>
+) {
+  if (!defaults) {
+    return;
+  }
+  const acc = (await fyo.doc.getDoc(
+    ModelNameEnum.AccountingSettings
+  )) as AccountingSettings;
+
+  const apply = async (
+    booksField: 'writeOffAccount' | 'roundOffAccount' | 'discountAccount',
+    erpKey: string
+  ) => {
+    const v = defaults[erpKey];
+    if (typeof v !== 'string' || !v) {
+      return;
+    }
+    if (!(await fyo.db.exists(ModelNameEnum.Account, v))) {
+      return;
+    }
+    await acc.setAndSync(booksField, v);
+  };
+
+  await apply('writeOffAccount', 'write_off_account');
+  await apply('roundOffAccount', 'round_off_account');
+  await apply('discountAccount', 'default_discount_account');
+}
+
+async function createAccountsFromERPNextList(
+  accounts: Array<{
+    name: string;
+    parent_account?: string | null;
+    is_group?: number | boolean;
+    root_type?: string;
+    account_type?: string;
+  }>,
+  fyo: Fyo
+) {
+  for (const row of accounts) {
+    const rootType = normalizeErpnextRootType(row.root_type);
+    const isGroup = row.is_group === 1 || row.is_group === true;
+    const accountType = normalizeErpnextAccountType(row.account_type);
+    await checkAndCreateDoc(
+      ModelNameEnum.Account,
+      {
+        name: row.name,
+        parentAccount: row.parent_account ? row.parent_account : null,
+        isGroup,
+        rootType,
+        accountType,
+      },
+      fyo
+    );
+  }
+}
+
+/**
+ * Create a new Books database from an ERPNext company template (parent-first
+ * accounts from books_integration.api.get_company_template).
+ */
+export async function setupInstanceFromERPNextTemplate(
+  dbPath: string,
+  template: {
+    company: {
+      name: string;
+      abbr?: string;
+      company_name?: string;
+      country?: string;
+      default_currency?: string;
+    };
+    accounts: Array<{
+      name: string;
+      parent_account?: string | null;
+      is_group?: number | boolean;
+      root_type?: string;
+      account_type?: string;
+    }>;
+    defaults?: Record<string, unknown>;
+    fiscal_year?: {
+      name?: string;
+      year_start_date?: unknown;
+      year_end_date?: unknown;
+    } | null;
+  },
+  fyo: Fyo
+) {
+  const company = template.company;
+  const country = (company.country ?? '').trim() || 'United States';
+  const companyName = (
+    (company.company_name ?? company.name ?? '') as string
+  ).trim();
+
+  if (!companyName) {
+    throw new Error('ERPNext template is missing a company name');
+  }
+
+  const countryOptions = getCountryInfo()[country] as CountryInfo | undefined;
+  const currency =
+    (company.default_currency ?? '').trim() ||
+    countryOptions?.currency ||
+    DEFAULT_CURRENCY;
+
+  let fiscalYearStart = DateTime.now().startOf('year').toISODate()!;
+  let fiscalYearEnd = DateTime.now().endOf('year').toISODate()!;
+  const fyRow = template.fiscal_year;
+  if (fyRow) {
+    const s = erpDateToIsoForBooks(fyRow.year_start_date);
+    const e = erpDateToIsoForBooks(fyRow.year_end_date);
+    if (s && e) {
+      fiscalYearStart = s;
+      fiscalYearEnd = e;
+    }
+  }
+
+  const rawDefaults = template.defaults;
+  const erpBankRaw =
+    typeof rawDefaults?.default_bank_account === 'string'
+      ? rawDefaults.default_bank_account.trim()
+      : '';
+
+  const setupWizardOptions: SetupWizardOptions = {
+    logo: null,
+    companyName,
+    country,
+    fullname: companyName,
+    email: 'alaa@rukn-software.com',
+    bankName: `${companyName} Bank`,
+    currency,
+    fiscalYearStart,
+    fiscalYearEnd,
+    chartOfAccounts: 'Standard',
+  };
+
+  fyo.store.skipTelemetryLogging = true;
+  try {
+    await initializeDatabase(dbPath, country, fyo);
+    await updateSystemSettings(setupWizardOptions, fyo);
+    await updatePrintSettings(setupWizardOptions, fyo);
+    await createCurrencyRecords(fyo);
+    await createAccountsFromERPNextList(template.accounts, fyo);
+
+    let bankName = '';
+    if (
+      erpBankRaw &&
+      (await fyo.db.exists(ModelNameEnum.Account, erpBankRaw))
+    ) {
+      bankName = erpBankRaw;
+    } else {
+      bankName = findFirstBankAccountName(template.accounts) ?? '';
+    }
+
+    if (!bankName) {
+      const parent = await getBankAccountParentName(country, fyo);
+      bankName = `${companyName} Bank`;
+      await checkAndCreateDoc(
+        ModelNameEnum.Account,
+        {
+          name: bankName,
+          rootType: AccountRootTypeEnum.Asset,
+          parentAccount: parent,
+          accountType: AccountTypeEnum.Bank,
+          isGroup: false,
+        },
+        fyo
+      );
+    }
+
+    setupWizardOptions.bankName = bankName;
+
+    await updateAccountingSettings(setupWizardOptions, fyo);
+
+    const erpDiscount =
+      typeof rawDefaults?.default_discount_account === 'string'
+        ? rawDefaults.default_discount_account.trim()
+        : '';
+    if (
+      !erpDiscount ||
+      !(await fyo.db.exists(ModelNameEnum.Account, erpDiscount))
+    ) {
+      await createDiscountAccount(fyo);
+    }
+    await setDefaultAccounts(fyo);
+    await applyErpnextCompanyDefaultAccounts(fyo, rawDefaults);
+    await createRegionalRecords(country, fyo);
+    await createDefaultEntries(fyo);
+    await createDefaultNumberSeries(fyo);
+    await updateInventorySettings(fyo);
+
+    if (fyo.isElectron) {
+      const { updatePrintTemplates } = await import('src/utils/printTemplates');
+      await updatePrintTemplates(fyo);
+    }
+
+    await completeSetup(companyName, fyo);
+    if (!Object.keys(fyo.currencySymbols).length) {
+      await setCurrencySymbols(fyo);
+    }
+  } finally {
+    fyo.store.skipTelemetryLogging = false;
+  }
 }
