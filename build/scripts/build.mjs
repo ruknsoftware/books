@@ -1,6 +1,7 @@
 import vue from '@vitejs/plugin-vue';
 import builder from 'electron-builder';
 import esbuild from 'esbuild';
+import { $ } from 'execa';
 import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -16,6 +17,7 @@ const buildDirPath = path.join(root, 'dist_electron', 'build');
 const packageDirPath = path.join(root, 'dist_electron', 'bundled');
 const mainFileName = 'main.js';
 const commonConfig = getMainProcessCommonConfig(root);
+const $$ = $({ stdio: 'inherit' });
 
 const rawArgs = yargs(hideBin(process.argv))
   .option('nosign', {
@@ -32,6 +34,7 @@ if (argv.nosign) {
   process.env['CSC_IDENTITY_AUTO_DISCOVERY'] = false;
 }
 
+await buildERPNextSyncExtendedIfPresent();
 updatePaths();
 await buildMainProcessSource();
 await buildRendererProcessSource();
@@ -39,6 +42,21 @@ copyPackageJson();
 
 if (!argv.nopackage) {
   await packageApp();
+}
+
+async function buildERPNextSyncExtendedIfPresent() {
+  const extRoot = path.join(root, '..', 'books-erpnext-sync-extended');
+  if (!fs.existsSync(extRoot)) {
+    return;
+  }
+
+  const pkgPath = path.join(extRoot, 'package.json');
+  if (!fs.existsSync(pkgPath)) {
+    return;
+  }
+
+  // Ensure dist/ reflects latest src/ before packaging the app that imports it.
+  await $$({ cwd: extRoot })`yarn build`;
 }
 
 function updatePaths() {

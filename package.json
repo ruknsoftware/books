@@ -85,7 +85,7 @@
     "yargs": "^17.7.2"
   },
   "optionalDependencies": {
-    "books-erpnext-sync-extended": "file:../books-erpnext-sync-extended"
+    "books-erpnext-sync-extended": "link:../books-erpnext-sync-extended"
   },
   "resolutions": {
     "node-abi": "^3.54.0"
