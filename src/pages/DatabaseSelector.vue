@@ -581,6 +581,11 @@ import { fyo } from 'src/initFyo';
 import { showDialog } from 'src/utils/interactive';
 import { sendAPIRequest } from 'src/utils/api';
 import { setupInstanceFromERPNextTemplate } from 'src/setup/setupInstance';
+import {
+  initERPNSync,
+  registerInstanceToERPNext,
+  updateERPNSyncSettings,
+} from 'src/utils/erpnextSync';
 import { updateConfigFiles } from 'src/utils/misc';
 import { deleteDb, getSavePath, getSelectedFilePath } from 'src/utils/ui';
 import type { ConfigFilesWithModified } from 'utils/types';
@@ -1077,6 +1082,26 @@ export default defineComponent({
           fyo
         );
         updateConfigFiles(fyo);
+        // Immediately pull data from ERPNext after import (no manual click).
+        try {
+          await registerInstanceToERPNext(fyo);
+          await updateERPNSyncSettings(fyo);
+          const syncSettings = await fyo.doc.getDoc('ERPNextSyncSettings');
+          if (!(syncSettings as any)?.isEnabled) {
+            await showDialog({
+              title: this.t`ERPNext sync is disabled`,
+              type: 'warning',
+              detail: this.t`Enable "Enable Sync" in ERPNext → Books Sync Settings, then try again.`,
+            });
+          } else {
+            await initERPNSync(fyo);
+          }
+        } catch (e) {
+          if (this.fyo.store.isDevelopment) {
+            // eslint-disable-next-line no-console
+            console.error('ERPNext import: auto-sync after import failed', e);
+          }
+        }
         await fyo.purgeCache();
         this.erpnextImportPendingTemplate = null;
         this.$emit('file-selected', filePath);
