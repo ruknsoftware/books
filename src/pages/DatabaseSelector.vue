@@ -357,7 +357,9 @@
           {{ t`ERPNext Import Settings` }}
         </h2>
         <p class="text-base mt-2 text-gray-700 dark:text-gray-400">
-          {{ t`Enter your ERPNext API Base URL and Auth Token (API Key:API Secret).` }}
+          {{
+            t`Review or change your ERPNext API Base URL and Auth Token (API Key:API Secret). Values are remembered until you change them.`
+          }}
         </p>
 
         <div class="mt-6 flex flex-col gap-4 text-base">
@@ -409,7 +411,7 @@
             t`Cancel`
           }}</Button>
           <Button type="primary" @click="saveERPNextImportSettings">{{
-            t`Save`
+            t`Continue`
           }}</Button>
         </div>
       </div>
@@ -504,8 +506,7 @@ export default defineComponent({
       this.fyo.config.set('erpnextImportAuthToken' as any, token);
       this.openERPNextImportModal = false;
 
-      // Continue the flow after saving.
-      void this.fromERPNextCompany();
+      void this.runERPNextImportFlow(baseURL, token);
     },
     async checkERPNextImportAvailability() {
       try {
@@ -607,20 +608,25 @@ export default defineComponent({
         return;
       }
 
-      const baseURL = this.fyo.config.get('erpnextImportBaseURL' as any) as
-        | string
-        | undefined;
-      const token = this.fyo.config.get('erpnextImportAuthToken' as any) as
-        | string
-        | undefined;
-
-      if (!baseURL || !token) {
-        this.erpnextBaseURLInput = baseURL ?? '';
-        this.erpnextAuthTokenInput = token ?? '';
-        this.openERPNextImportModal = true;
+      if (!this.erpnextImportAvailable) {
+        await showDialog({
+          title: this.t`ERPNext import not available`,
+          detail: this.t`Please update/install books-erpnext-sync-extended.`,
+          type: 'info',
+        });
         return;
       }
 
+      this.erpnextBaseURLInput =
+        (this.fyo.config.get('erpnextImportBaseURL' as any) as string | undefined) ??
+        '';
+      this.erpnextAuthTokenInput =
+        (this.fyo.config.get('erpnextImportAuthToken' as any) as
+          | string
+          | undefined) ?? '';
+      this.openERPNextImportModal = true;
+    },
+    async runERPNextImportFlow(baseURL: string, token: string) {
       const ext = await import('books-erpnext-sync-extended');
       const mod = (ext as any)?.default ?? ext;
       const getERPNextCompanies = mod
