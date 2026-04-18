@@ -426,6 +426,12 @@ export class Payment extends Transactional {
     }
 
     const amount = this.amount as Money;
+    const zero = this.fyo.pesa(0);
+
+    // ERP/import: referenced invoices may show 0 outstanding while payment is still valid to save.
+    if (!outstandingAmount.gt(zero)) {
+      return;
+    }
 
     if (amount.gt(0) && amount.lte(outstandingAmount)) {
       return;
@@ -732,15 +738,19 @@ export class Payment extends Transactional {
         return;
       }
 
-      if (!this.totalAmount) {
-        for (const row of this.for ?? []) {
-          const referenceDoc = (await this.fyo.doc.getDoc(
-            row.referenceType as string,
-            row.referenceName as string
-          )) as Invoice;
+      const paymentVal = value as Money;
+      const zero = this.fyo.pesa(0);
+      for (const row of this.for ?? []) {
+        const referenceDoc = (await this.fyo.doc.getDoc(
+          row.referenceType as string,
+          row.referenceName as string
+        )) as Invoice;
 
-          this.totalAmount = referenceDoc.outstandingAmount?.abs();
-        }
+        const outstanding = referenceDoc.outstandingAmount?.abs();
+        // ERP/import: invoice may show 0 outstanding while payment is valid; Money(0) is also truthy,
+        // so do not rely on !this.totalAmount alone.
+        this.totalAmount =
+          outstanding != null && outstanding.gt(zero) ? outstanding : paymentVal;
       }
 
       if ((value as Money).gt(this.totalAmount as Money)) {
