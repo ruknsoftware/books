@@ -569,6 +569,13 @@ async function performPreSync(fyo: Fyo, doc: DocValueMap) {
 
     case 'Customer':
     case 'Supplier':
+    case ModelNameEnum.Party:
+      // ERPNext customers without a primary address omit `address`; never enqueue
+      // FetchFromERPNextQueue with an empty documentName (mandatory field).
+      if (!doc.address) {
+        return;
+      }
+
       const isAddressExists = await fyo.db.exists(
         ModelNameEnum.Address,
         doc.address as string
@@ -855,6 +862,10 @@ async function preSyncSalesInvoice(fyo: Fyo, doc: SalesInvoice) {
 }
 
 async function addToFetchFromERPNextQueue(fyo: Fyo, data: DocValueMap) {
+  const documentName = data.documentName as string | undefined;
+  if (documentName == null || documentName === '') {
+    return;
+  }
   await fyo.doc.getNewDoc(ModelNameEnum.FetchFromERPNextQueue, data).sync();
 }
 
