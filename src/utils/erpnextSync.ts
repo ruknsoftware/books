@@ -1073,14 +1073,15 @@ function getDocTypeName(doc: DocValueMap | Doc): string {
   const doctype =
     doc.schemaName ?? doc.referenceType ?? (doc.doctype as string);
 
-  if (['Supplier', 'Customer'].includes(doctype as string)) {
+  // ERPNext sends Customer / Supplier / Party for the same Books Party model.
+  // Never return role strings ("Customer"/"Supplier") as pseudo-doctypes: they are
+  // not in ModelNameEnum, skip incremental sync (`in ModelNameEnum` / fetch allowlist),
+  // and initial sync buckets them under docsByType["Customer"] while processOrder only
+  // has "Party" — so those masters are never inserted and SalesInvoice then fails links.
+  if (
+    ['Supplier', 'Customer', ModelNameEnum.Party].includes(doctype as string)
+  ) {
     return ModelNameEnum.Party;
-  }
-
-  if (doctype === 'Party') {
-    if (doc.role && doc.role !== 'Both') {
-      return doc.role as string;
-    }
   }
 
   return doctype as string;
