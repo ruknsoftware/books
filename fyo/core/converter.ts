@@ -190,12 +190,20 @@ function toDocDate(value: RawValue, field: Field) {
     throwError(value, field, 'doc');
   }
 
-  const date = DateTime.fromISO(value).toJSDate();
-  if (date.toString() === 'Invalid Date') {
+  let dt = DateTime.fromISO(value);
+  if (!dt.isValid) {
+    // ERPNext / MariaDB often send SQL datetimes (`YYYY-MM-DD HH:mm:ss.ssssss`),
+    // which are not ISO-8601 and fail `fromISO`.
+    dt = DateTime.fromSQL(value);
+  }
+  if (!dt.isValid && value.includes(' ') && !value.includes('T')) {
+    dt = DateTime.fromISO(value.replace(' ', 'T'));
+  }
+  if (!dt.isValid) {
     throwError(value, field, 'doc');
   }
 
-  return date;
+  return dt.toJSDate();
 }
 
 function toDocCurrency(value: RawValue, field: Field, fyo: Fyo) {
