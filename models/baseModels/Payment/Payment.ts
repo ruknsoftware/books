@@ -719,7 +719,7 @@ export class Payment extends Transactional {
     },
     referenceType: {
       formula: () => {
-        return this.referenceType || undefined;
+        return this.referenceType || this.paymentType === 'Pay' ? ModelNameEnum.PurchaseInvoice : ModelNameEnum.SalesInvoice;
       },
       dependsOn: ['for'],
     },
