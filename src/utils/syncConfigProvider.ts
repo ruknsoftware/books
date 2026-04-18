@@ -68,6 +68,8 @@ export const defaultSyncConfigProvider: SyncConfigProvider = {
       ModelNameEnum.PriceList,
       ModelNameEnum.PricingRule,
       ModelNameEnum.Batch,
+      ModelNameEnum.SalesInvoice,
+      ModelNameEnum.Payment,
     ];
   },
 };

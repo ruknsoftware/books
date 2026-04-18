@@ -47,7 +47,7 @@ test('default provider: getFetchSyncableDoctypes returns original 5', (t) => {
   t.end();
 });
 
-test('default provider: getInitialSyncProcessOrder returns original order', (t) => {
+test('default provider: getInitialSyncProcessOrder masters then SI then Payment', (t) => {
   setSyncConfigProvider(null);
   const order = getSyncConfigProvider().getInitialSyncProcessOrder();
   const expected = [
@@ -59,8 +59,10 @@ test('default provider: getInitialSyncProcessOrder returns original order', (t) 
     ModelNameEnum.PriceList,
     ModelNameEnum.PricingRule,
     ModelNameEnum.Batch,
+    ModelNameEnum.SalesInvoice,
+    ModelNameEnum.Payment,
   ];
-  t.deepEqual(order, expected, 'process order unchanged');
+  t.deepEqual(order, expected, 'SalesInvoice before Payment');
   t.end();
 });
 
