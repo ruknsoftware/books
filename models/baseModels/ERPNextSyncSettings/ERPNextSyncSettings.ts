@@ -91,6 +91,7 @@ export class ERPNextSyncSettings extends Doc {
         } catch (logError) {
           throw logError;
         }
+        ipc.reloadWindow();
       }
     } else if (ch.changed === 'syncDataToServer') {
       try {
@@ -116,6 +117,7 @@ export class ERPNextSyncSettings extends Doc {
         } catch (logError) {
           throw logError;
         }
+        ipc.reloadWindow();
       }
     }
   }
