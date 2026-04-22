@@ -2,6 +2,9 @@ import Bree from 'bree';
 import fs from 'fs-extra';
 import path from 'path';
 import main from 'main';
+import config from 'utils/config';
+import { retrieveToken, syncDatabaseToServer } from './subscription';
+import { emitMainProcessError } from 'backend/helpers';
 
 let bree: Bree;
 
@@ -38,14 +41,45 @@ export async function initScheduler(interval: string) {
           },
         },
       },
+      {
+        name: 'triggerDatabaseSync',
+        interval: '60 minutes',
+        worker: {
+          workerData: {
+            useTsNode: true,
+          },
+        },
+      },
     ],
     worker: {
       argv: ['--require', 'ts-node/register'],
     },
   });
 
-  bree.on('worker created', () => {
-    main.mainWindow?.webContents.send('trigger-erpnext-sync');
+  bree.on('worker created', (name: string) => {
+    const worker = bree.workers.get(name);
+    if (!worker) return;
+
+    worker.on('message', (message: unknown) => {
+      if (message && typeof message === 'object' && 'type' in message) {
+        const msg = message as { type: string };
+        if (msg.type === 'trigger-erpnext-sync') {
+          main.mainWindow?.webContents.send('trigger-erpnext-sync');
+        } else if (msg.type === 'trigger-database-sync') {
+          const token = retrieveToken();
+          const dbPath = config.get('lastSelectedFilePath');
+          if (token && typeof dbPath === 'string') {
+            syncDatabaseToServer(dbPath, token).catch((err: unknown) => {
+              emitMainProcessError(err);
+            });
+          }
+        }
+      }
+    });
+
+    worker.on('error', (err: unknown) => {
+      emitMainProcessError(err);
+    });
   });
 
   await bree.start();
