@@ -40,6 +40,12 @@ export type ConfigMap = {
   erpnextImportBaseURL?: string;
   /** ERPNext API token in the form api_key:api_secret. */
   erpnextImportAuthToken?: string;
+  /** Encrypted subscription token (base64 of safeStorage cipher). */
+  subscriptionToken?: string;
+  /** Unique instance ID for this installation (for Books Instance doctype). */
+  subscriptionInstanceId?: string;
+  /** Unix timestamp (ms) of last successful subscription verification. */
+  subscriptionLastVerifiedAt?: number;
 };
 
 export interface ConfigFile {
