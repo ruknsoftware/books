@@ -4,6 +4,7 @@ import fetch from 'node-fetch';
 import { randomBytes } from 'crypto';
 
 const SUBSCRIPTION_SERVER = 'http://localhost:8001';
+// const SUBSCRIPTION_SERVER = 'https://maidapos.rukn.sh';
 export const GRACE_PERIOD_DAYS = 1;
 
 /**
@@ -23,17 +24,17 @@ async function verifyTokenWithServer(
         },
       }
     );
-    console.log('res', res);
     if (res.status === 200) {
-      const body = (await res.json()) as { message: any };
+      const body = (await res.json()) as { message: unknown };
       let email = '';
       if (body.message && typeof body.message === 'object') {
-        email = body.message.name || '';
-        if (body.message.name) {
-          config.set('subscriptionDocname' as any, body.message.name);
+        const msgData = body.message as Record<string, unknown>;
+        email = (msgData.name as string) || '';
+        if (msgData.name) {
+          config.set('subscriptionDocname' as never, msgData.name as never);
         }
-        if (body.message.doctype) {
-          config.set('subscriptionDoctype' as any, body.message.doctype);
+        if (msgData.doctype) {
+          config.set('subscriptionDoctype' as never, msgData.doctype as never);
         }
       } else if (typeof body.message === 'string') {
         email = body.message;
@@ -58,17 +59,17 @@ export default verifyTokenWithServer;
 export function storeToken(token: string): void {
   if (!safeStorage.isEncryptionAvailable()) {
     // Fallback: store plaintext (only for debugging / unsupported OS)
-    config.set('subscriptionToken' as any, token);
+    config.set('subscriptionToken' as never, token as never);
     return;
   }
 
   const encrypted = safeStorage.encryptString(token);
-  config.set('subscriptionToken' as any, encrypted.toString('base64'));
+  config.set('subscriptionToken' as never, encrypted.toString('base64') as never);
 }
 
 /** Decrypt and return the stored token; returns null if none. */
 export function retrieveToken(): string | null {
-  const stored = config.get('subscriptionToken' as any) as string | undefined;
+  const stored = config.get('subscriptionToken' as never) as string | undefined;
   if (!stored) return null;
 
   if (!safeStorage.isEncryptionAvailable()) {
@@ -85,31 +86,29 @@ export function retrieveToken(): string | null {
 
 /** Remove the stored token. */
 export function clearToken(): void {
-  config.delete('subscriptionToken' as any);
-  config.delete('subscriptionLastVerifiedAt' as any);
+  config.delete('subscriptionToken' as never);
+  config.delete('subscriptionLastVerifiedAt' as never);
 }
 
 /** Get or generate a stable unique instance ID for "Books Instance" doctype. */
 export function getInstanceId(): string {
-  let id = config.get('subscriptionInstanceId' as any) as string | undefined;
+  let id = config.get('subscriptionInstanceId' as never) as string | undefined;
   if (id) return id;
 
   // Generate a short random ID like "abc123-de456fg7"
-  id = randomBytes(8)
-    .toString('hex')
-    .replace(/(.{6})/, '$1-');
-  config.set('subscriptionInstanceId' as any, id);
+  id = randomBytes(8).toString('hex').replace(/(.{6})/, '$1-');
+  config.set('subscriptionInstanceId' as never, id as never);
   return id;
 }
 
 /** Record the current time as last successful verification. */
 export function setLastVerifiedAt(): void {
-  config.set('subscriptionLastVerifiedAt' as any, Date.now());
+  config.set('subscriptionLastVerifiedAt' as never, Date.now() as never);
 }
 
 /** Return the timestamp of the last successful verification, or null. */
 export function getLastVerifiedAt(): number | null {
-  const ts = config.get('subscriptionLastVerifiedAt' as any) as
+  const ts = config.get('subscriptionLastVerifiedAt' as never) as
     | number
     | undefined;
   return ts ?? null;
@@ -129,35 +128,38 @@ export function isWithinGracePeriod(): boolean {
  * Uses the /api/method/upload_file endpoint.
  * Builds multipart/form-data manually to avoid extra dependencies.
  */
+let isSyncing = false;
+
 export async function syncDatabaseToServer(
   dbPath: string,
   token: string
 ): Promise<{ success: boolean; message: string }> {
-  const fs = await import('fs-extra');
-  const path = await import('path');
-
-  if (!dbPath || !(await fs.pathExists(dbPath))) {
-    return { success: false, message: 'No database file found' };
+  if (isSyncing) {
+    return { success: false, message: 'Sync already in progress' };
   }
+  
+  isSyncing = true;
+  try {
+    const fs = await import('fs-extra');
+    const path = await import('path');
 
-  const instanceId = getInstanceId();
-  const fileName = path.basename(dbPath);
-  const fileBuffer = await fs.readFile(dbPath);
+    if (!dbPath || !(await fs.pathExists(dbPath))) {
+      return { success: false, message: 'No database file found' };
+    }
 
-  // Build multipart/form-data manually
-  const boundary = `----BooksSync${Date.now()}${randomBytes(4).toString(
-    'hex'
-  )}`;
-  const CRLF = '\r\n';
+    const fileName = path.basename(dbPath);
+    const fileBuffer = await fs.readFile(dbPath);
 
-  const textFields: Record<string, string> = {
-    is_private: '1',
-    folder: 'Home/Attachments',
-    doctype:
-      (config.get('subscriptionDoctype' as any) as string) ||
-      'Books Subscription Settings',
-    docname: (config.get('subscriptionDocname' as any) as string) || '',
-  };
+    // Build multipart/form-data manually
+    const boundary = `----BooksSync${Date.now()}${randomBytes(4).toString('hex')}`;
+    const CRLF = '\r\n';
+
+    const textFields: Record<string, string> = {
+      is_private: '1',
+      folder: 'Home/Attachments',
+      doctype: (config.get('subscriptionDoctype' as never) as string) || 'Books Subscription Settings',
+      docname: (config.get('subscriptionDocname' as never) as string) || '',
+    };
 
   const parts: Buffer[] = [];
 
@@ -183,29 +185,32 @@ export async function syncDatabaseToServer(
   parts.push(fileBuffer);
   parts.push(Buffer.from(`${CRLF}--${boundary}--${CRLF}`));
 
-  const body = Buffer.concat(parts as unknown as Uint8Array[]);
+    const body = Buffer.concat(parts as unknown as Uint8Array[]);
 
-  try {
-    const res = await fetch(`${SUBSCRIPTION_SERVER}/api/method/upload_file`, {
-      method: 'POST',
-      headers: {
-        Authorization: `token ${token}`,
-        'Content-Type': `multipart/form-data; boundary=${boundary}`,
-      },
-      body,
-    });
+    try {
+      const res = await fetch(`${SUBSCRIPTION_SERVER}/api/method/upload_file`, {
+        method: 'POST',
+        headers: {
+          Authorization: `token ${token}`,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        },
+        body,
+      });
 
-    if (res.status === 200) {
-      return { success: true, message: 'Database synced successfully' };
+      if (res.status === 200) {
+        return { success: true, message: 'Database synced successfully' };
+      }
+
+      const errBody = await res.text();
+      return {
+        success: false,
+        message: `Server returned ${res.status}: ${errBody.slice(0, 200)}`,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { success: false, message: `Sync failed: ${msg}` };
     }
-
-    const errBody = await res.text();
-    return {
-      success: false,
-      message: `Server returned ${res.status}: ${errBody.slice(0, 200)}`,
-    };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { success: false, message: `Sync failed: ${msg}` };
+  } finally {
+    isSyncing = false;
   }
 }
