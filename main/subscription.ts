@@ -147,8 +147,38 @@ export async function syncDatabaseToServer(
       return { success: false, message: 'No database file found' };
     }
 
-    const fileName = path.basename(dbPath);
-    const fileBuffer = await fs.readFile(dbPath);
+    let fileToSync = dbPath;
+    const backupFolder = path.join(path.dirname(dbPath), 'backups');
+    
+    if (await fs.pathExists(backupFolder)) {
+      let baseName = path.parse(dbPath).name;
+      if (baseName.endsWith('.books')) {
+        baseName = baseName.slice(0, -6);
+      }
+      
+      const files = await fs.readdir(backupFolder);
+      let latestBackup = '';
+      let latestTime = 0;
+
+      for (const file of files) {
+        if (file.startsWith(baseName + '_') && file.endsWith('.books.db')) {
+          const filePath = path.join(backupFolder, file);
+          const stats = await fs.stat(filePath);
+          if (stats.mtimeMs > latestTime) {
+            latestTime = stats.mtimeMs;
+            latestBackup = filePath;
+          }
+        }
+      }
+
+      if (latestBackup) {
+        fileToSync = latestBackup;
+        console.log(`[Sync] Found latest backup to sync: ${fileToSync}`);
+      }
+    }
+
+    const fileName = path.basename(fileToSync);
+    const fileBuffer = await fs.readFile(fileToSync);
 
     // Build multipart/form-data manually
     const boundary = `----BooksSync${Date.now()}${randomBytes(4).toString('hex')}`;
