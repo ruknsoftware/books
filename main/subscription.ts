@@ -3,8 +3,10 @@ import config from 'utils/config';
 import fetch from 'node-fetch';
 import { randomBytes } from 'crypto';
 
-const SUBSCRIPTION_SERVER = 'http://localhost:8001';
-// const SUBSCRIPTION_SERVER = 'https://maidapos.rukn.sh';
+const SUBSCRIPTION_SERVER =
+  process.env.NODE_ENV === 'development'
+    ? 'http://localhost:8001'
+    : 'https://maidapos.rukn.sh';
 export const GRACE_PERIOD_DAYS = 1;
 
 /**
