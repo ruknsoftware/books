@@ -140,13 +140,12 @@
 
 <script lang="ts">
 import { defineComponent } from 'vue';
-import FeatherIcon from 'src/components/FeatherIcon.vue';
 import Button from 'src/components/Button.vue';
 import Rukn from 'src/components/Icons/18/rukn.vue';
 
 export default defineComponent({
   name: 'SubscriptionGate',
-  components: { Button, FeatherIcon, Rukn },
+  components: { Button, Rukn },
   emits: ['subscription-verified'],
   data() {
     return {
