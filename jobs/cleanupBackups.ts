@@ -5,12 +5,19 @@ import { emitMainProcessError } from '../backend/helpers';
 
 const KEEP_MOST_RECENT = 3;
 
-async function cleanupDir(dirPath: string): Promise<void> {
+async function cleanupDir(
+  dirPath: string,
+  fileNamePrefix?: string
+): Promise<void> {
   try {
     if (!(await fs.pathExists(dirPath))) return;
 
     const entries = await fs.readdir(dirPath);
-    const candidates = entries.filter((name) => name.endsWith('.books.db'));
+    const candidates = entries.filter((name) => {
+      if (!name.endsWith('.books.db')) return false;
+      if (!fileNamePrefix) return true;
+      return name.startsWith(fileNamePrefix);
+    });
 
     const stats = await Promise.all(
       candidates.map(async (name) => {
@@ -36,7 +43,9 @@ async function cleanupBackups(): Promise<void> {
     for (const file of files) {
       if (!file?.dbPath || typeof file.dbPath !== 'string') continue;
       const backupsDir = path.join(path.dirname(file.dbPath), 'backups');
-      await cleanupDir(backupsDir);
+      const companyName = path.basename(file.dbPath, '.books.db');
+      if (!companyName) continue;
+      await cleanupDir(backupsDir, companyName);
     }
   } catch (err) {
     emitMainProcessError(err);
