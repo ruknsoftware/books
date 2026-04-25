@@ -152,7 +152,10 @@ export default defineComponent({
     try {
       const features = (ipc as any)?.store?.get?.('subscriptionFeatures');
       if (features && typeof features === 'object') {
-        (fyo.config as any).set('subscriptionFeatures', features);
+        fyo.config.set(
+          'subscriptionFeatures',
+          features as Record<string, boolean>
+        );
       }
     } catch {
       // non-fatal

@@ -149,7 +149,7 @@ function getSubFeature(
   key: string,
   defaultValue: boolean
 ): boolean {
-  const raw = (doc.fyo?.config as any)?.get?.('subscriptionFeatures');
+  const raw = doc.fyo?.config?.get('subscriptionFeatures');
   if (!raw || typeof raw !== 'object') return defaultValue;
   const obj = raw as unknown as Record<string, unknown>;
   return typeof obj[key] === 'boolean' ? (obj[key] as boolean) : defaultValue;
