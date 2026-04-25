@@ -140,23 +140,23 @@ export default defineComponent({
           { shortcut: [ShortcutKey.esc], description: t`Close Quick Search` },
           {
             shortcut: [ShortcutKey.pmod, '1'],
-            description: t`Toggle the Docs filter`,
-          },
-          {
-            shortcut: [ShortcutKey.pmod, '2'],
             description: t`Toggle the List filter`,
           },
           {
-            shortcut: [ShortcutKey.pmod, '3'],
+            shortcut: [ShortcutKey.pmod, '2'],
             description: t`Toggle the Create filter`,
           },
           {
-            shortcut: [ShortcutKey.pmod, '4'],
+            shortcut: [ShortcutKey.pmod, '3'],
             description: t`Toggle the Report filter`,
           },
           {
-            shortcut: [ShortcutKey.pmod, '5'],
+            shortcut: [ShortcutKey.pmod, '4'],
             description: t`Toggle the Page filter`,
+          },
+          {
+            shortcut: [ShortcutKey.pmod, '5'],
+            description: t`Toggle the Recent filter`,
           },
         ],
       },

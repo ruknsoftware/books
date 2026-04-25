@@ -82,20 +82,12 @@
               >
                 {{ si.label }}
               </p>
-              <p
-                v-if="si.group === 'Docs'"
-                class="text-gray-600 dark:text-gray-400 text-sm ms-3"
-              >
-                {{ si.more.filter(Boolean).join(', ') }}
-              </p>
             </div>
             <p
               class="text-sm text-end justify-self-end"
               :class="`text-${groupColorMap[si.group]}-500`"
             >
-              {{
-                si.group === 'Docs' ? si.schemaLabel : groupLabelMap[si.group]
-              }}
+              {{ groupLabelMap[si.group] }}
             </p>
           </div>
 
@@ -262,7 +254,7 @@ export default defineComponent({
   data() {
     return {
       idx: 0,
-      searchGroups: searchGroups.filter((g) => g !== 'Docs'),
+      searchGroups,
       openModal: false,
       inputValue: '',
       showMore: false,
@@ -300,7 +292,6 @@ export default defineComponent({
     },
     groupColorMap(): Record<SearchGroup, string> {
       return {
-        Docs: 'blue',
         Create: 'green',
         List: 'teal',
         Report: 'yellow',
@@ -319,9 +310,7 @@ export default defineComponent({
         return [];
       }
 
-      const suggestions = this.searcher
-        .search(this.inputValue)
-        .filter((si) => si.group !== 'Docs');
+      const suggestions = this.searcher.search(this.inputValue);
       if (this.limit === -1) {
         return suggestions;
       }
