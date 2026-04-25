@@ -195,8 +195,18 @@ export class DatabaseManager extends DatabaseDemuxBase {
     }
 
     const db = this.getDriver();
-    await db?.backup(backupPath).then(() => db.close());
-    return backupPath;
+    if (!db) {
+      return null;
+    }
+
+    try {
+      await db.backup(backupPath);
+      return backupPath;
+    } catch {
+      return null;
+    } finally {
+      db.close();
+    }
   }
 
   async #createBackup() {
