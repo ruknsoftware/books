@@ -11,7 +11,7 @@ const SUBSCRIPTION_SERVER =
 export const GRACE_PERIOD_DAYS = 1;
 
 /**
- * Call the Frappe server to verify the API token.
+ * Call the Rukn server to verify the API token.
  * Token format: "api_key:api_secret"
  */
 async function verifyTokenWithServer(
@@ -155,7 +155,7 @@ export function isWithinGracePeriod(): boolean {
 }
 
 /**
- * Upload the database file to the Frappe server.
+ * Upload the database file to the Rukn server.
  * Uses the /api/method/upload_file endpoint.
  * Builds multipart/form-data manually to avoid extra dependencies.
  */

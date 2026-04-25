@@ -1,10 +1,10 @@
 {
-  "name": "frappe-books",
-  "version": "0.41.0",
+  "name": "rukn-books",
+  "version": "0.42.0",
   "description": "Simple book-keeping app for everyone",
   "author": {
-    "name": "Frappe Technologies Pvt. Ltd.",
-    "email": "hello@frappe.io"
+    "name": "Rukn Software",
+    "email": "alaa@rukn-software.com"
   },
   "scripts": {
     "dev": "node build/scripts/dev.mjs",
@@ -96,9 +96,9 @@
     "singleQuote": true,
     "trailingComma": "es5"
   },
-  "homepage": "https://frappe.io/books",
+  "homepage": "https://rukn-software.com",
   "repository": {
-    "url": "https://github.com/frappe/books"
+    "url": "https://github.com/ruknsoftware/books"
   },
   "license": "AGPL-3.0-only"
 }
