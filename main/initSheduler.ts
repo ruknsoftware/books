@@ -9,12 +9,17 @@ import {
   isWithinGracePeriod,
 } from './subscription';
 import { emitMainProcessError } from 'backend/helpers';
-import pRetry, { AbortError } from 'p-retry';
 import databaseManager from 'backend/database/manager';
 
 let bree: Bree;
 let inFlightDatabaseSync: Promise<void> | null = null;
 let databaseSyncFailureCount = 0;
+
+let pRetryModule: typeof import('p-retry') | null = null;
+async function getPRetry() {
+  pRetryModule ??= await import('p-retry');
+  return pRetryModule;
+}
 
 function getDatabaseSyncInterval(): string {
   const configured = config.get('databaseSyncInterval' as never) as unknown;
@@ -24,6 +29,7 @@ function getDatabaseSyncInterval(): string {
 }
 
 async function runDatabaseSyncWithRetry(): Promise<void> {
+  const { default: pRetry, AbortError } = await getPRetry();
   await pRetry(
     async () => {
       // Validity gate: require both a stored token and an in-grace verified subscription.
