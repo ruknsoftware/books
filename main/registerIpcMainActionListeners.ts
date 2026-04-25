@@ -286,15 +286,36 @@ export default function registerIpcMainActionListeners(main: Main) {
       return { valid: false, email: '', withinGrace: false };
     }
 
-    const result = await verifyTokenWithServer(token);
-    if (result.valid) {
-      setLastVerifiedAt();
-      return { valid: true, email: result.email, withinGrace: false };
+    const withinGrace = isWithinGracePeriod();
+
+    const verifyPromise = verifyTokenWithServer(token)
+      .then((result) => {
+        if (result.valid) {
+          setLastVerifiedAt();
+        }
+        return result;
+      })
+      .catch(() => null);
+
+    if (withinGrace) {
+      return { valid: false, email: '', withinGrace: true };
     }
 
-    // Token stored but server says invalid — check grace period
-    const withinGrace = isWithinGracePeriod();
-    return { valid: false, email: '', withinGrace };
+    // Not within grace: try a very short verification window so we can sometimes
+    // return `valid: true` without noticeably delaying startup.
+    const timeoutMs = 1000;
+    const timedResult = await Promise.race([
+      verifyPromise,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+    ]);
+
+    if (timedResult?.valid) {
+      return { valid: true, email: timedResult.email, withinGrace: false };
+    }
+
+    // If we timed out or verification failed/invalid, return fast.
+    // `verifyPromise` may still complete later and update lastVerifiedAt on success.
+    return { valid: false, email: '', withinGrace: false };
   });
 
   ipcMain.handle(IPC_ACTIONS.CLEAR_SUB_TOKEN, () => {
