@@ -7,7 +7,7 @@ import { SUBSCRIPTION_FEATURE_SERVER_MAP } from 'utils/subscriptionFeatures';
 const SUBSCRIPTION_SERVER =
   process.env.NODE_ENV === 'development'
     ? 'http://localhost:8001'
-    : 'https://maidapos.rukn.sh';
+    : 'https://books.rukn.sh';
 export const GRACE_PERIOD_DAYS = 1;
 
 /**
