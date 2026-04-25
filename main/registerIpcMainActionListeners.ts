@@ -283,18 +283,39 @@ export default function registerIpcMainActionListeners(main: Main) {
   ipcMain.handle(IPC_ACTIONS.GET_STORED_TOKEN, async () => {
     const token = retrieveToken();
     if (!token) {
-      return { token: null, valid: false, email: '', withinGrace: false };
+      return { valid: false, email: '', withinGrace: false };
     }
 
-    const result = await verifyTokenWithServer(token);
-    if (result.valid) {
-      setLastVerifiedAt();
-      return { token, valid: true, email: result.email, withinGrace: false };
-    }
-
-    // Token stored but server says invalid — check grace period
     const withinGrace = isWithinGracePeriod();
-    return { token, valid: false, email: '', withinGrace };
+
+    const verifyPromise = verifyTokenWithServer(token)
+      .then((result) => {
+        if (result.valid) {
+          setLastVerifiedAt();
+        }
+        return result;
+      })
+      .catch(() => null);
+
+    if (withinGrace) {
+      return { valid: false, email: '', withinGrace: true };
+    }
+
+    // Not within grace: try a very short verification window so we can sometimes
+    // return `valid: true` without noticeably delaying startup.
+    const timeoutMs = 10000;
+    const timedResult = await Promise.race([
+      verifyPromise,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+    ]);
+
+    if (timedResult?.valid) {
+      return { valid: true, email: timedResult.email, withinGrace: false };
+    }
+
+    // If we timed out or verification failed/invalid, return fast.
+    // `verifyPromise` may still complete later and update lastVerifiedAt on success.
+    return { valid: false, email: '', withinGrace: false };
   });
 
   ipcMain.handle(IPC_ACTIONS.CLEAR_SUB_TOKEN, () => {
@@ -303,11 +324,11 @@ export default function registerIpcMainActionListeners(main: Main) {
 
   ipcMain.handle(IPC_ACTIONS.SYNC_DB_NOW, async () => {
     const token = retrieveToken();
-    const dbPath = config.get('lastSelectedFilePath');
-    if (!token || !dbPath) {
+    const backupPath = await databaseManager.createBackup();
+    if (!token || !backupPath) {
       return { success: false, message: 'No token or database path available' };
     }
-    return await syncDatabaseToServer(dbPath, token);
+    return await syncDatabaseToServer(backupPath, token);
   });
 
   /**

@@ -219,7 +219,6 @@ const ipc = {
 
   async getStoredToken() {
     return (await ipcRenderer.invoke(IPC_ACTIONS.GET_STORED_TOKEN)) as {
-      token: string | null;
       valid: boolean;
       email: string;
       withinGrace: boolean;

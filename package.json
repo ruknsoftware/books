@@ -1,6 +1,6 @@
 {
   "name": "frappe-books",
-  "version": "0.39.4",
+  "version": "0.40.1",
   "description": "Simple book-keeping app for everyone",
   "author": {
     "name": "Frappe Technologies Pvt. Ltd.",
@@ -33,6 +33,7 @@
     "lodash": "^4.17.23",
     "luxon": "^2.5.2",
     "node-fetch": "2",
+    "p-retry": "^7.1.0",
     "pesa": "^1.1.12",
     "source-map-support": "^0.5.21",
     "vue": "^3.2.40",

@@ -3,10 +3,85 @@ import fs from 'fs-extra';
 import path from 'path';
 import main from 'main';
 import config from 'utils/config';
-import { retrieveToken, syncDatabaseToServer, isWithinGracePeriod } from './subscription';
+import {
+  retrieveToken,
+  syncDatabaseToServer,
+  isWithinGracePeriod,
+} from './subscription';
 import { emitMainProcessError } from 'backend/helpers';
+import databaseManager from 'backend/database/manager';
 
 let bree: Bree;
+let inFlightDatabaseSync: Promise<void> | null = null;
+let databaseSyncFailureCount = 0;
+
+let pRetryModule: typeof import('p-retry') | null = null;
+async function getPRetry() {
+  pRetryModule ??= await import('p-retry');
+  return pRetryModule;
+}
+
+function getDatabaseSyncInterval(): string {
+  const configured = config.get('databaseSyncInterval' as never) as unknown;
+  return typeof configured === 'string' && configured.trim()
+    ? configured
+    : '24 hours';
+}
+
+async function runDatabaseSyncWithRetry(): Promise<void> {
+  const { default: pRetry, AbortError } = await getPRetry();
+  try {
+    await pRetry(
+      async () => {
+        // Validity gate: require both a stored token and an in-grace verified subscription.
+        const token = retrieveToken();
+        if (!token || !isWithinGracePeriod()) {
+          databaseSyncFailureCount = 0;
+          throw new AbortError(
+            '[Sync] Skipping scheduled database sync (no valid token / outside grace period)'
+          );
+        }
+
+        const backupPath = await databaseManager.createBackup();
+        if (!backupPath) {
+          throw new AbortError(
+            '[Sync] Skipping scheduled database sync (no active database)'
+          );
+        }
+
+        const result = await syncDatabaseToServer(backupPath, token);
+        if (!result?.success) {
+          throw new Error(result?.message || 'Database sync failed');
+        }
+
+        databaseSyncFailureCount = 0;
+      },
+      {
+        // Keep retrying on transient failures with exponential backoff + jitter.
+        retries: 5,
+        factor: 2,
+        minTimeout: 30_000,
+        maxTimeout: 30 * 60_000,
+        randomize: true,
+        onFailedAttempt: (err) => {
+          databaseSyncFailureCount = err.attemptNumber;
+          console.log(
+            `[Sync] Database sync failed (attempt ${databaseSyncFailureCount}); retrying...`
+          );
+        },
+      }
+    );
+  } catch (err) {
+    // AbortError is used for "skip" gates and should not be treated as a failure.
+    if (err instanceof AbortError) {
+      return;
+    }
+
+    emitMainProcessError(err);
+    databaseSyncFailureCount = Math.max(databaseSyncFailureCount, 1);
+    console.log('[Sync] Database sync failed after retries; giving up.');
+  }
+}
 
 export async function initScheduler(interval: string) {
   const devJobsRoot = path.join(__dirname, '..', '..', 'jobs');
@@ -43,7 +118,16 @@ export async function initScheduler(interval: string) {
       },
       {
         name: 'triggerDatabaseSync',
-        interval: '60 minutes',
+        interval: getDatabaseSyncInterval(),
+        worker: {
+          workerData: {
+            useTsNode: true,
+          },
+        },
+      },
+      {
+        name: 'cleanupBackups',
+        interval: '24 hours',
         worker: {
           workerData: {
             useTsNode: true,
@@ -66,17 +150,14 @@ export async function initScheduler(interval: string) {
         if (msg.type === 'trigger-erpnext-sync') {
           main.mainWindow?.webContents.send('trigger-erpnext-sync');
         } else if (msg.type === 'trigger-database-sync') {
-          if (!isWithinGracePeriod()) {
-            console.log('[Sync] Skipping scheduled database sync (not within grace period or no valid token)');
+          // Concurrency guard: do not start another sync while one (incl. retries) is in-flight.
+          if (inFlightDatabaseSync) {
             return;
           }
-          const token = retrieveToken();
-          const dbPath = config.get('lastSelectedFilePath');
-          if (token && typeof dbPath === 'string') {
-            syncDatabaseToServer(dbPath, token).catch((err: unknown) => {
-              emitMainProcessError(err);
-            });
-          }
+
+          inFlightDatabaseSync = runDatabaseSyncWithRetry().finally(() => {
+            inFlightDatabaseSync = null;
+          });
         }
       }
     });

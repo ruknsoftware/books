@@ -2,11 +2,12 @@ import { safeStorage } from 'electron';
 import config from 'utils/config';
 import fetch from 'node-fetch';
 import { randomBytes } from 'crypto';
+import { SUBSCRIPTION_FEATURE_SERVER_MAP } from 'utils/subscriptionFeatures';
 
 const SUBSCRIPTION_SERVER =
   process.env.NODE_ENV === 'development'
     ? 'http://localhost:8001'
-    : 'https://maidapos.rukn.sh';
+    : 'https://books.rukn.sh';
 export const GRACE_PERIOD_DAYS = 1;
 
 /**
@@ -15,7 +16,12 @@ export const GRACE_PERIOD_DAYS = 1;
  */
 async function verifyTokenWithServer(
   token: string
-): Promise<{ valid: boolean; email: string; message: string }> {
+): Promise<{
+  valid: boolean;
+  email: string;
+  message: string;
+  features?: Record<string, boolean>;
+}> {
   try {
     const res = await fetch(
       `${SUBSCRIPTION_SERVER}/api/method/rukn_books_subscription.api.validate_api_token`,
@@ -29,19 +35,44 @@ async function verifyTokenWithServer(
     if (res.status === 200) {
       const body = (await res.json()) as { message: unknown };
       let email = '';
+      let features: Record<string, boolean> | undefined;
       if (body.message && typeof body.message === 'object') {
         const msgData = body.message as Record<string, unknown>;
-        email = (msgData.name as string) || '';
-        if (msgData.name) {
-          config.set('subscriptionDocname' as never, msgData.name as never);
-        }
-        if (msgData.doctype) {
-          config.set('subscriptionDoctype' as never, msgData.doctype as never);
+        const docname = typeof msgData.name === 'string' ? msgData.name : '';
+        email = docname;
+        if (docname) config.set('subscriptionDocname', docname);
+
+        const doctype = typeof msgData.doctype === 'string' ? msgData.doctype : '';
+        if (doctype) config.set('subscriptionDoctype', doctype);
+
+        // Optional feature-flags payload from subscription settings.
+        // Server uses snake_case keys; Books uses camelCase fieldnames.
+        const bool = (v: unknown): boolean | undefined => {
+          if (typeof v === 'boolean') return v;
+          if (v === 0 || v === 1) return Boolean(v);
+          if (typeof v === 'string') {
+            const t = v.trim().toLowerCase();
+            if (t === '1' || t === 'true' || t === 'yes') return true;
+            if (t === '0' || t === 'false' || t === 'no') return false;
+          }
+          return undefined;
+        };
+
+        for (const [serverKey, booksKey] of Object.entries(
+          SUBSCRIPTION_FEATURE_SERVER_MAP
+        )) {
+          const v = bool(msgData[serverKey]);
+          if (v === undefined) continue;
+          features ??= {};
+          features[booksKey] = v;
         }
       } else if (typeof body.message === 'string') {
         email = body.message;
       }
-      return { valid: true, email, message: 'OK' };
+      if (features) {
+        config.set('subscriptionFeatures', features);
+      }
+      return { valid: true, email, message: 'OK', features };
     }
 
     // 401 or other status
@@ -61,17 +92,17 @@ export default verifyTokenWithServer;
 export function storeToken(token: string): void {
   if (!safeStorage.isEncryptionAvailable()) {
     // Fallback: store plaintext (only for debugging / unsupported OS)
-    config.set('subscriptionToken' as never, token as never);
+    config.set('subscriptionToken', token);
     return;
   }
 
   const encrypted = safeStorage.encryptString(token);
-  config.set('subscriptionToken' as never, encrypted.toString('base64') as never);
+  config.set('subscriptionToken', encrypted.toString('base64'));
 }
 
 /** Decrypt and return the stored token; returns null if none. */
 export function retrieveToken(): string | null {
-  const stored = config.get('subscriptionToken' as never) as string | undefined;
+  const stored = config.get('subscriptionToken');
   if (!stored) return null;
 
   if (!safeStorage.isEncryptionAvailable()) {
@@ -88,31 +119,29 @@ export function retrieveToken(): string | null {
 
 /** Remove the stored token. */
 export function clearToken(): void {
-  config.delete('subscriptionToken' as never);
-  config.delete('subscriptionLastVerifiedAt' as never);
+  config.delete('subscriptionToken');
+  config.delete('subscriptionLastVerifiedAt');
 }
 
 /** Get or generate a stable unique instance ID for "Books Instance" doctype. */
 export function getInstanceId(): string {
-  let id = config.get('subscriptionInstanceId' as never) as string | undefined;
+  let id = config.get('subscriptionInstanceId');
   if (id) return id;
 
   // Generate a short random ID like "abc123-de456fg7"
   id = randomBytes(8).toString('hex').replace(/(.{6})/, '$1-');
-  config.set('subscriptionInstanceId' as never, id as never);
+  config.set('subscriptionInstanceId', id);
   return id;
 }
 
 /** Record the current time as last successful verification. */
 export function setLastVerifiedAt(): void {
-  config.set('subscriptionLastVerifiedAt' as never, Date.now() as never);
+  config.set('subscriptionLastVerifiedAt', Date.now());
 }
 
 /** Return the timestamp of the last successful verification, or null. */
 export function getLastVerifiedAt(): number | null {
-  const ts = config.get('subscriptionLastVerifiedAt' as never) as
-    | number
-    | undefined;
+  const ts = config.get('subscriptionLastVerifiedAt');
   return ts ?? null;
 }
 
@@ -189,8 +218,8 @@ export async function syncDatabaseToServer(
     const textFields: Record<string, string> = {
       is_private: '1',
       folder: 'Home/Attachments',
-      doctype: (config.get('subscriptionDoctype' as never) as string) || 'Books Subscription Settings',
-      docname: (config.get('subscriptionDocname' as never) as string) || '',
+      doctype: config.get('subscriptionDoctype') || 'Books Subscription Settings',
+      docname: config.get('subscriptionDocname') || '',
     };
 
   const parts: Buffer[] = [];
