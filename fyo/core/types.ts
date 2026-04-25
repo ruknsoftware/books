@@ -42,6 +42,10 @@ export type ConfigMap = {
   erpnextImportAuthToken?: string;
   /** Encrypted subscription token (base64 of safeStorage cipher). */
   subscriptionToken?: string;
+  /** Subscription settings docname returned by the server. */
+  subscriptionDocname?: string;
+  /** Subscription settings doctype returned by the server. */
+  subscriptionDoctype?: string;
   /** Unique instance ID for this installation (for Books Instance doctype). */
   subscriptionInstanceId?: string;
   /** Unix timestamp (ms) of last successful subscription verification. */

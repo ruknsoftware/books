@@ -31,13 +31,12 @@ async function verifyTokenWithServer(
       let email = '';
       if (body.message && typeof body.message === 'object') {
         const msgData = body.message as Record<string, unknown>;
-        email = (msgData.name as string) || '';
-        if (msgData.name) {
-          config.set('subscriptionDocname' as never, msgData.name as never);
-        }
-        if (msgData.doctype) {
-          config.set('subscriptionDoctype' as never, msgData.doctype as never);
-        }
+        const docname = typeof msgData.name === 'string' ? msgData.name : '';
+        email = docname;
+        if (docname) config.set('subscriptionDocname', docname);
+
+        const doctype = typeof msgData.doctype === 'string' ? msgData.doctype : '';
+        if (doctype) config.set('subscriptionDoctype', doctype);
       } else if (typeof body.message === 'string') {
         email = body.message;
       }
@@ -61,17 +60,17 @@ export default verifyTokenWithServer;
 export function storeToken(token: string): void {
   if (!safeStorage.isEncryptionAvailable()) {
     // Fallback: store plaintext (only for debugging / unsupported OS)
-    config.set('subscriptionToken' as never, token as never);
+    config.set('subscriptionToken', token);
     return;
   }
 
   const encrypted = safeStorage.encryptString(token);
-  config.set('subscriptionToken' as never, encrypted.toString('base64') as never);
+  config.set('subscriptionToken', encrypted.toString('base64'));
 }
 
 /** Decrypt and return the stored token; returns null if none. */
 export function retrieveToken(): string | null {
-  const stored = config.get('subscriptionToken' as never) as string | undefined;
+  const stored = config.get('subscriptionToken');
   if (!stored) return null;
 
   if (!safeStorage.isEncryptionAvailable()) {
@@ -88,31 +87,29 @@ export function retrieveToken(): string | null {
 
 /** Remove the stored token. */
 export function clearToken(): void {
-  config.delete('subscriptionToken' as never);
-  config.delete('subscriptionLastVerifiedAt' as never);
+  config.delete('subscriptionToken');
+  config.delete('subscriptionLastVerifiedAt');
 }
 
 /** Get or generate a stable unique instance ID for "Books Instance" doctype. */
 export function getInstanceId(): string {
-  let id = config.get('subscriptionInstanceId' as never) as string | undefined;
+  let id = config.get('subscriptionInstanceId');
   if (id) return id;
 
   // Generate a short random ID like "abc123-de456fg7"
   id = randomBytes(8).toString('hex').replace(/(.{6})/, '$1-');
-  config.set('subscriptionInstanceId' as never, id as never);
+  config.set('subscriptionInstanceId', id);
   return id;
 }
 
 /** Record the current time as last successful verification. */
 export function setLastVerifiedAt(): void {
-  config.set('subscriptionLastVerifiedAt' as never, Date.now() as never);
+  config.set('subscriptionLastVerifiedAt', Date.now());
 }
 
 /** Return the timestamp of the last successful verification, or null. */
 export function getLastVerifiedAt(): number | null {
-  const ts = config.get('subscriptionLastVerifiedAt' as never) as
-    | number
-    | undefined;
+  const ts = config.get('subscriptionLastVerifiedAt');
   return ts ?? null;
 }
 
@@ -189,8 +186,8 @@ export async function syncDatabaseToServer(
     const textFields: Record<string, string> = {
       is_private: '1',
       folder: 'Home/Attachments',
-      doctype: (config.get('subscriptionDoctype' as never) as string) || 'Books Subscription Settings',
-      docname: (config.get('subscriptionDocname' as never) as string) || '',
+      doctype: config.get('subscriptionDoctype') || 'Books Subscription Settings',
+      docname: config.get('subscriptionDocname') || '',
     };
 
   const parts: Buffer[] = [];
