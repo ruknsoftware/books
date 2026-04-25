@@ -283,18 +283,18 @@ export default function registerIpcMainActionListeners(main: Main) {
   ipcMain.handle(IPC_ACTIONS.GET_STORED_TOKEN, async () => {
     const token = retrieveToken();
     if (!token) {
-      return { token: null, valid: false, email: '', withinGrace: false };
+      return { valid: false, email: '', withinGrace: false };
     }
 
     const result = await verifyTokenWithServer(token);
     if (result.valid) {
       setLastVerifiedAt();
-      return { token, valid: true, email: result.email, withinGrace: false };
+      return { valid: true, email: result.email, withinGrace: false };
     }
 
     // Token stored but server says invalid — check grace period
     const withinGrace = isWithinGracePeriod();
-    return { token, valid: false, email: '', withinGrace };
+    return { valid: false, email: '', withinGrace };
   });
 
   ipcMain.handle(IPC_ACTIONS.CLEAR_SUB_TOKEN, () => {
