@@ -147,6 +147,16 @@ export default defineComponent({
     },
   },
   async mounted() {
+    // Mirror subscription feature-flags from Electron store into fyo.config,
+    // so model-layer `hidden` functions can access them.
+    try {
+      const features = (ipc as any)?.store?.get?.('subscriptionFeatures');
+      if (features && typeof features === 'object') {
+        (fyo.config as any).set('subscriptionFeatures', features);
+      }
+    } catch {
+      // non-fatal
+    }
     await this.setInitialScreen();
     const darkMode = !!fyo.singles.SystemSettings?.darkMode;
     setDarkMode(darkMode);

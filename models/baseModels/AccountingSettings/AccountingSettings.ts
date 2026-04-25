@@ -91,9 +91,29 @@ export class AccountingSettings extends Doc {
     discountAccount: () => !this.enableDiscounting,
     gstin: () => this.fyo.singles.SystemSettings?.countryCode !== 'in',
     enablePricingRule: () =>
+      !getSubFeature(this, 'enablePricingRule', true) ||
       !this.fyo.singles.AccountingSettings?.enableDiscounting,
     enableCouponCode: () =>
+      !getSubFeature(this, 'enableCouponCode', true) ||
       !this.fyo.singles.AccountingSettings?.enablePricingRule,
+
+    // Subscription-controlled feature flags (hide toggles when disabled).
+    enableDiscounting: () => !getSubFeature(this, 'enableDiscounting', true),
+    enablePriceList: () => !getSubFeature(this, 'enablePriceList', true),
+    enableFormCustomization: () =>
+      !getSubFeature(this, 'enableFormCustomization', true),
+    enableLead: () => !getSubFeature(this, 'enableLead', true),
+    enableItemEnquiry: () => !getSubFeature(this, 'enableItemEnquiry', true),
+    enableLoyaltyProgram: () =>
+      !getSubFeature(this, 'enableLoyaltyProgram', true),
+    enableInventory: () => !getSubFeature(this, 'enableInventory', true),
+    enableInvoiceReturns: () =>
+      !getSubFeature(this, 'enableInvoiceReturns', true),
+    enableERPNextSync: () => !getSubFeature(this, 'enableERPNextSync', true),
+    enablePointOfSaleWithOutInventory: () =>
+      !getSubFeature(this, 'enablePointOfSaleWithOutInventory', true),
+    enablePartialPayment: () => !getSubFeature(this, 'enablePartialPayment', true),
+    enableitemGroup: () => !getSubFeature(this, 'enableitemGroup', true),
   };
 
   async change(ch: ChangeArg) {
@@ -122,4 +142,15 @@ export class AccountingSettings extends Doc {
       await inventorySettings.sync();
     }
   }
+}
+
+function getSubFeature(
+  doc: Doc,
+  key: string,
+  defaultValue: boolean
+): boolean {
+  const raw = (doc.fyo?.config as any)?.get?.('subscriptionFeatures');
+  if (!raw || typeof raw !== 'object') return defaultValue;
+  const obj = raw as unknown as Record<string, unknown>;
+  return typeof obj[key] === 'boolean' ? (obj[key] as boolean) : defaultValue;
 }

@@ -15,7 +15,12 @@ export const GRACE_PERIOD_DAYS = 1;
  */
 async function verifyTokenWithServer(
   token: string
-): Promise<{ valid: boolean; email: string; message: string }> {
+): Promise<{
+  valid: boolean;
+  email: string;
+  message: string;
+  features?: Record<string, boolean>;
+}> {
   try {
     const res = await fetch(
       `${SUBSCRIPTION_SERVER}/api/method/rukn_books_subscription.api.validate_api_token`,
@@ -29,6 +34,7 @@ async function verifyTokenWithServer(
     if (res.status === 200) {
       const body = (await res.json()) as { message: unknown };
       let email = '';
+      let features: Record<string, boolean> | undefined;
       if (body.message && typeof body.message === 'object') {
         const msgData = body.message as Record<string, unknown>;
         const docname = typeof msgData.name === 'string' ? msgData.name : '';
@@ -37,10 +43,50 @@ async function verifyTokenWithServer(
 
         const doctype = typeof msgData.doctype === 'string' ? msgData.doctype : '';
         if (doctype) config.set('subscriptionDoctype', doctype);
+
+        // Optional feature-flags payload from subscription settings.
+        // Server uses snake_case keys; Books uses camelCase fieldnames.
+        const bool = (v: unknown): boolean | undefined => {
+          if (typeof v === 'boolean') return v;
+          if (v === 0 || v === 1) return Boolean(v);
+          if (typeof v === 'string') {
+            const t = v.trim().toLowerCase();
+            if (t === '1' || t === 'true' || t === 'yes') return true;
+            if (t === '0' || t === 'false' || t === 'no') return false;
+          }
+          return undefined;
+        };
+
+        const map: Record<string, string> = {
+          enable_discounting: 'enableDiscounting',
+          enable_price_list: 'enablePriceList',
+          enable_form_customization: 'enableFormCustomization',
+          enable_lead: 'enableLead',
+          enable_item_enquiry: 'enableItemEnquiry',
+          enable_coupon_code: 'enableCouponCode',
+          enable_item_group: 'enableitemGroup',
+          enable_partial_payment: 'enablePartialPayment',
+          enable_inventory: 'enableInventory',
+          enable_invoice_returns: 'enableInvoiceReturns',
+          enable_erpnext_sync: 'enableERPNextSync',
+          enable_pricing_rule: 'enablePricingRule',
+          enable_loyalty_program: 'enableLoyaltyProgram',
+          enable_pos_without_inventory: 'enablePointOfSaleWithOutInventory',
+        };
+
+        for (const [serverKey, booksKey] of Object.entries(map)) {
+          const v = bool(msgData[serverKey]);
+          if (v === undefined) continue;
+          features ??= {};
+          features[booksKey] = v;
+        }
       } else if (typeof body.message === 'string') {
         email = body.message;
       }
-      return { valid: true, email, message: 'OK' };
+      if (features) {
+        config.set('subscriptionFeatures', features);
+      }
+      return { valid: true, email, message: 'OK', features };
     }
 
     // 401 or other status
