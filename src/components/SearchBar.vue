@@ -192,18 +192,6 @@
             <p>↑↓ {{ t`Navigate` }}</p>
             <p>↩ {{ t`Select` }}</p>
             <p><span class="tracking-tighter">esc</span> {{ t`Close` }}</p>
-            <button
-              class="
-                flex
-                items-center
-                hover:text-gray-800
-                dark:hover:text-gray-300
-              "
-              @click="openDocs"
-            >
-              <feather-icon name="help-circle" class="w-4 h-4 me-1" />
-              {{ t`Help` }}
-            </button>
           </div>
 
           <p v-if="searcher?.numSearches" class="ms-auto">
@@ -248,7 +236,6 @@
 import { fyo } from 'src/initFyo';
 import { getBgTextColorClass } from 'src/utils/colors';
 import { searcherKey, shortcutsKey } from 'src/utils/injectionKeys';
-import { docsPathMap } from 'src/utils/misc';
 import {
   SearchGroup,
   SearchItems,
@@ -275,7 +262,7 @@ export default defineComponent({
   data() {
     return {
       idx: 0,
-      searchGroups,
+      searchGroups: searchGroups.filter((g) => g !== 'Docs'),
       openModal: false,
       inputValue: '',
       showMore: false,
@@ -332,7 +319,9 @@ export default defineComponent({
         return [];
       }
 
-      const suggestions = this.searcher.search(this.inputValue);
+      const suggestions = this.searcher
+        .search(this.inputValue)
+        .filter((si) => si.group !== 'Docs');
       if (this.limit === -1) {
         return suggestions;
       }
@@ -356,9 +345,6 @@ export default defineComponent({
     this.shortcuts?.delete(COMPONENT_NAME);
   },
   methods: {
-    openDocs() {
-      ipc.openLink('https://docs.frappe.io/' + docsPathMap.Search);
-    },
     getShortcuts() {
       const ifOpen = (cb: Function) => () => this.openModal && cb();
       const ifClose = (cb: Function) => () => !this.openModal && cb();
@@ -370,11 +356,11 @@ export default defineComponent({
         },
       ];
 
-      for (const i in searchGroups) {
+      for (const i in this.searchGroups) {
         shortcuts.push({
           shortcut: `Digit${Number(i) + 1}`,
           callback: ifOpen(() => {
-            const group = searchGroups[i];
+            const group = this.searchGroups[i];
             if (!this.searcher) {
               return;
             }

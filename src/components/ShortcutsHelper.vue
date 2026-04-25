@@ -85,10 +85,6 @@ export default defineComponent({
             shortcut: [ShortcutKey.shift, 'H'],
             description: t`Toggle sidebar`,
           },
-          {
-            shortcut: ['F1'],
-            description: t`Open Documentation`,
-          },
         ],
       },
       {

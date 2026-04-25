@@ -62,14 +62,6 @@
                 >
                   {{ t`Set Up` }}
                 </Button>
-                <Button
-                  v-if="item.documentation"
-                  class="leading-tight text-base"
-                  :class="{ 'ms-4': item.action }"
-                  @click="handleDocumentation(item)"
-                >
-                  {{ t`Documentation` }}
-                </Button>
               </div>
             </div>
           </div>
@@ -112,17 +104,6 @@ export default defineComponent({
     await this.checkForCompletedTasks();
   },
   methods: {
-    async handleDocumentation({ key, documentation }: ListItem) {
-      if (documentation) {
-        ipc.openLink(documentation);
-      }
-
-      switch (key) {
-        case 'Opening Balances':
-          await this.updateChecks({ openingBalanceChecked: true });
-          break;
-      }
-    },
     async handleAction({ key, action }: ListItem) {
       if (action) {
         action();
