@@ -186,11 +186,6 @@ export class DatabaseManager extends DatabaseDemuxBase {
   async createBackup(options?: {
     throwOnError?: boolean;
   }): Promise<string | null> {
-    const { dbPath } = this.db ?? {};
-    if (!dbPath || process.env.IS_TEST) {
-      return null;
-    }
-
     const backupPath = await this.#getBackupFilePath();
     if (!backupPath) {
       return null;
@@ -215,6 +210,11 @@ export class DatabaseManager extends DatabaseDemuxBase {
   }
 
   async #createBackup() {
+    const { dbPath } = this.db ?? {};
+    if (!dbPath || process.env.IS_TEST) {
+      return;
+    }
+
     const backupPath = await this.createBackup({ throwOnError: true });
     if (!backupPath) {
       throw new DatabaseError('backup could not be created');
