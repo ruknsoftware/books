@@ -2,6 +2,7 @@ import { safeStorage } from 'electron';
 import config from 'utils/config';
 import fetch from 'node-fetch';
 import { randomBytes } from 'crypto';
+import { SUBSCRIPTION_FEATURE_SERVER_MAP } from 'utils/subscriptionFeatures';
 
 const SUBSCRIPTION_SERVER =
   process.env.NODE_ENV === 'development'
@@ -57,24 +58,9 @@ async function verifyTokenWithServer(
           return undefined;
         };
 
-        const map: Record<string, string> = {
-          enable_discounting: 'enableDiscounting',
-          enable_price_list: 'enablePriceList',
-          enable_form_customization: 'enableFormCustomization',
-          enable_lead: 'enableLead',
-          enable_item_enquiry: 'enableItemEnquiry',
-          enable_coupon_code: 'enableCouponCode',
-          enable_item_group: 'enableitemGroup',
-          enable_partial_payment: 'enablePartialPayment',
-          enable_inventory: 'enableInventory',
-          enable_invoice_returns: 'enableInvoiceReturns',
-          enable_erpnext_sync: 'enableERPNextSync',
-          enable_pricing_rule: 'enablePricingRule',
-          enable_loyalty_program: 'enableLoyaltyProgram',
-          enable_pos_without_inventory: 'enablePointOfSaleWithOutInventory',
-        };
-
-        for (const [serverKey, booksKey] of Object.entries(map)) {
+        for (const [serverKey, booksKey] of Object.entries(
+          SUBSCRIPTION_FEATURE_SERVER_MAP
+        )) {
           const v = bool(msgData[serverKey]);
           if (v === undefined) continue;
           features ??= {};

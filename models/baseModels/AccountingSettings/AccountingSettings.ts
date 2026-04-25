@@ -12,6 +12,7 @@ import { InventorySettings } from 'models/inventory/InventorySettings';
 import { ModelNameEnum } from 'models/types';
 import { createDiscountAccount } from 'src/setup/setupInstance';
 import { getCountryInfo } from 'utils/misc';
+import { SUBSCRIPTION_FEATURES, SubscriptionFeatureKey } from 'utils/subscriptionFeatures';
 
 export class AccountingSettings extends Doc {
   enableDiscounting?: boolean;
@@ -91,29 +92,40 @@ export class AccountingSettings extends Doc {
     discountAccount: () => !this.enableDiscounting,
     gstin: () => this.fyo.singles.SystemSettings?.countryCode !== 'in',
     enablePricingRule: () =>
-      !getSubFeature(this, 'enablePricingRule', true) ||
+      !getSubFeature(this, SUBSCRIPTION_FEATURES.enablePricingRule, false) ||
       !this.fyo.singles.AccountingSettings?.enableDiscounting,
     enableCouponCode: () =>
-      !getSubFeature(this, 'enableCouponCode', true) ||
+      !getSubFeature(this, SUBSCRIPTION_FEATURES.enableCouponCode, false) ||
       !this.fyo.singles.AccountingSettings?.enablePricingRule,
 
     // Subscription-controlled feature flags (hide toggles when disabled).
-    enableDiscounting: () => !getSubFeature(this, 'enableDiscounting', true),
-    enablePriceList: () => !getSubFeature(this, 'enablePriceList', true),
+    enableDiscounting: () =>
+      !getSubFeature(this, SUBSCRIPTION_FEATURES.enableDiscounting, false),
+    enablePriceList: () =>
+      !getSubFeature(this, SUBSCRIPTION_FEATURES.enablePriceList, false),
     enableFormCustomization: () =>
-      !getSubFeature(this, 'enableFormCustomization', true),
-    enableLead: () => !getSubFeature(this, 'enableLead', true),
-    enableItemEnquiry: () => !getSubFeature(this, 'enableItemEnquiry', true),
+      !getSubFeature(this, SUBSCRIPTION_FEATURES.enableFormCustomization, false),
+    enableLead: () => !getSubFeature(this, SUBSCRIPTION_FEATURES.enableLead, false),
+    enableItemEnquiry: () =>
+      !getSubFeature(this, SUBSCRIPTION_FEATURES.enableItemEnquiry, false),
     enableLoyaltyProgram: () =>
-      !getSubFeature(this, 'enableLoyaltyProgram', true),
-    enableInventory: () => !getSubFeature(this, 'enableInventory', true),
+      !getSubFeature(this, SUBSCRIPTION_FEATURES.enableLoyaltyProgram, false),
+    enableInventory: () =>
+      !getSubFeature(this, SUBSCRIPTION_FEATURES.enableInventory, false),
     enableInvoiceReturns: () =>
-      !getSubFeature(this, 'enableInvoiceReturns', true),
-    enableERPNextSync: () => !getSubFeature(this, 'enableERPNextSync', true),
+      !getSubFeature(this, SUBSCRIPTION_FEATURES.enableInvoiceReturns, false),
+    enableERPNextSync: () =>
+      !getSubFeature(this, SUBSCRIPTION_FEATURES.enableERPNextSync, false),
     enablePointOfSaleWithOutInventory: () =>
-      !getSubFeature(this, 'enablePointOfSaleWithOutInventory', true),
-    enablePartialPayment: () => !getSubFeature(this, 'enablePartialPayment', true),
-    enableitemGroup: () => !getSubFeature(this, 'enableitemGroup', true),
+      !getSubFeature(
+        this,
+        SUBSCRIPTION_FEATURES.enablePointOfSaleWithOutInventory,
+        false
+      ),
+    enablePartialPayment: () =>
+      !getSubFeature(this, SUBSCRIPTION_FEATURES.enablePartialPayment, false),
+    enableitemGroup: () =>
+      !getSubFeature(this, SUBSCRIPTION_FEATURES.enableitemGroup, false),
   };
 
   async change(ch: ChangeArg) {
@@ -146,7 +158,7 @@ export class AccountingSettings extends Doc {
 
 function getSubFeature(
   doc: Doc,
-  key: string,
+  key: SubscriptionFeatureKey,
   defaultValue: boolean
 ): boolean {
   const raw = doc.fyo?.config?.get('subscriptionFeatures');
