@@ -1,5 +1,5 @@
 productName: RUKN Books
-appId: io.rukn.books
+appId: sh.rukn.books
 asarUnpack: '**/*.node'
 extraResources:
   [
@@ -12,7 +12,7 @@ mac:
   category: public.app-category.finance
   icon: build/icon.png
   # notarize:
-  #   appBundleId: io.rukn.books
+  #   appBundleId: sh.rukn.books
   hardenedRuntime: true
   gatekeeperAssess: false
   darkModeSupport: false

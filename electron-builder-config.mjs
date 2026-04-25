@@ -16,7 +16,7 @@ const packageDirPath = path.join(root, 'dist_electron', 'bundled');
 
 const frappeBooksConfig = {
   productName: 'RUKN Books',
-  appId: 'io.rukn.books',
+  appId: 'sh.rukn.books',
   artifactName: '${productName}-v${version}-${os}-${arch}.${ext}',
   asarUnpack: '**/*.node',
   extraResources: [
