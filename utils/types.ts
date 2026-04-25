@@ -81,7 +81,6 @@ export interface ConfigFilesWithModified extends ConfigFile {
 }
 
 export const searchGroups = [
-  'Docs',
   'List',
   'Create',
   'Report',
@@ -93,7 +92,7 @@ export type SearchGroup = typeof searchGroups[number];
 
 export interface SearchItem {
   label: string;
-  group: Exclude<SearchGroup, 'Docs' | 'Recent'>;
+  group: Exclude<SearchGroup, 'Recent'>;
   route?: string;
   action?: () => void | Promise<void>;
   schemaName?: string;

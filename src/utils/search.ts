@@ -26,17 +26,11 @@ interface StoredRecentItem {
   timestamp: number;
 }
 
-interface DocSearchItem extends Omit<SearchItem, 'group'> {
-  group: 'Docs';
-  schemaLabel: string;
-  more: string[];
-}
-
 interface RecentSearchItem extends Omit<SearchItem, 'group'> {
   group: 'Recent';
 }
 
-export type SearchItems = (DocSearchItem | SearchItem | RecentSearchItem)[];
+export type SearchItems = (SearchItem | RecentSearchItem)[];
 
 interface Searchable {
   needsUpdate: boolean;
@@ -70,7 +64,6 @@ export function getGroupLabelMap() {
     Create: t`Create`,
     List: t`List`,
     Report: t`Report`,
-    Docs: t`Docs`,
     Page: t`Page`,
     Recent: t`Recent`,
   };
@@ -378,7 +371,6 @@ export class Search {
       Report: true,
       Create: true,
       Page: true,
-      Docs: true,
       Recent: true,
     },
     schemaFilters: {},
@@ -432,8 +424,6 @@ export class Search {
 
     if ('route' in item && item.route) {
       recentItem.route = item.route;
-    } else if (item.group === 'Docs') {
-      recentItem.schemaName = item.schemaLabel;
     } else if (item.group === 'Create') {
       recentItem.schemaName = item.schemaName;
       recentItem.initData = item.initData;
@@ -480,16 +470,9 @@ export class Search {
     } else if (item.schemaName && item.group === 'Create') {
       const action = getCreateAction(this.fyo, item.schemaName, item.initData);
       void action();
-    } else if (item.schemaName) {
-      this._openDocList(item.schemaName);
     } else if (item.reportName) {
       this._openReport(item.reportName);
     }
-  }
-
-  private _openDocList(schemaName: string) {
-    const route = `/list/${schemaName}`;
-    void routeTo(route);
   }
 
   private _openReport(reportName: string) {
@@ -605,12 +588,8 @@ export class Search {
 
     for (const si of this._intermediate.suggestions) {
       const label = si.label;
-      const groupLabel =
-        (si as DocSearchItem).schemaLabel || this._groupLabelMap?.[si.group];
-      const more = (si as DocSearchItem).more ?? [];
-      const values = [label, more, groupLabel]
-        .flat()
-        .filter(Boolean) as string[];
+      const groupLabel = this._groupLabelMap?.[si.group];
+      const values = [label, groupLabel].flat().filter(Boolean) as string[];
 
       const { isMatch, distance } = this._getMatchAndDistance(input, values);
 
@@ -664,13 +643,6 @@ export class Search {
     /**
      * Create the suggestion list.
      */
-    const groupedKeywords = this._getGroupedKeywords();
-    const keys = Object.keys(groupedKeywords);
-    if (!keys.includes('0')) {
-      keys.push('0');
-    }
-
-    keys.sort((a, b) => safeParseFloat(b) - safeParseFloat(a));
     const array: SearchItems = [];
 
     const showRecent =
@@ -685,24 +657,22 @@ export class Search {
       }
     }
 
+    const groupedKeywords = this._getGroupedKeywords();
+    const keys = Object.keys(groupedKeywords);
+    keys.sort((a, b) => safeParseFloat(b) - safeParseFloat(a));
     for (const key of keys) {
       const keywords = groupedKeywords[key] ?? [];
-      this._pushDocSearchItems(keywords, array, input);
-      if (key === '0') {
-        this._pushNonDocSearchItems(array, input);
-      }
+      this._pushKeywordSearchItems(keywords, array, input);
     }
+
+    this._pushNonDocSearchItems(array, input);
 
     this._setIntermediate(array, input);
     return array;
   }
 
-  _pushDocSearchItems(keywords: Keyword[], array: SearchItems, input?: string) {
+  _pushKeywordSearchItems(keywords: Keyword[], array: SearchItems, input?: string) {
     if (!input) {
-      return;
-    }
-
-    if (!this.filters.groupFilters.Docs) {
       return;
     }
 
@@ -780,7 +750,7 @@ export class Search {
     }
 
     return {
-      item: this._getDocSearchItemFromKeyword(item),
+      item: this._getSearchItemFromKeyword(item),
       distance,
     };
   }
@@ -824,15 +794,13 @@ export class Search {
     return { isMatch, distance };
   }
 
-  _getDocSearchItemFromKeyword(keyword: Keyword): DocSearchItem {
+  _getSearchItemFromKeyword(keyword: Keyword): SearchItem {
     const schemaName = keyword.meta.schemaName as string;
-    const schemaLabel = this.fyo.schemaMap[schemaName]?.label ?? schemaName;
     const route = this._getRouteFromKeyword(keyword);
     return {
       label: keyword.values[0],
-      schemaLabel,
-      more: keyword.values.slice(1),
-      group: 'Docs',
+      group: 'List',
+      route: route as string,
       action: async () => {
         await routeTo(route);
       },
@@ -857,7 +825,7 @@ export class Search {
     const schemaNames = Object.keys(this.keywords);
     for (const sn of schemaNames) {
       const searchable = this.searchables[sn];
-      if (!this.filters.schemaFilters[sn] || !this.filters.groupFilters.Docs) {
+      if (!this.filters.schemaFilters[sn]) {
         continue;
       }
 
