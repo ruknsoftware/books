@@ -65,7 +65,6 @@ async function runDatabaseSyncWithRetry(): Promise<void> {
         randomize: true,
         onFailedAttempt: (err) => {
           databaseSyncFailureCount = err.attemptNumber;
-          emitMainProcessError(err);
           console.log(
             `[Sync] Database sync failed (attempt ${databaseSyncFailureCount}); retrying...`
           );
