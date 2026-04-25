@@ -303,7 +303,7 @@ export default function registerIpcMainActionListeners(main: Main) {
 
     // Not within grace: try a very short verification window so we can sometimes
     // return `valid: true` without noticeably delaying startup.
-    const timeoutMs = 1000;
+    const timeoutMs = 10000;
     const timedResult = await Promise.race([
       verifyPromise,
       new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
