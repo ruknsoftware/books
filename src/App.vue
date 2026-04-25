@@ -35,6 +35,10 @@
       @setup-complete="setupComplete"
       @setup-canceled="showDbSelector"
     />
+    <SubscriptionGate
+      v-if="activeScreen === 'SubscriptionGate'"
+      @subscription-verified="subscriptionVerified"
+    />
 
     <!-- Render target for toasts -->
     <div
@@ -54,6 +58,7 @@ import { handleErrorWithDialog } from './errorHandling';
 import { fyo } from './initFyo';
 import DatabaseSelector from './pages/DatabaseSelector.vue';
 import Desk from './pages/Desk.vue';
+import SubscriptionGate from './pages/SubscriptionGate.vue';
 import SetupWizard from './pages/SetupWizard/SetupWizard.vue';
 import setupInstance from './setup/setupInstance';
 import { SetupWizardOptions } from './setup/types';
@@ -81,6 +86,7 @@ enum Screen {
   Desk = 'Desk',
   DatabaseSelector = 'DatabaseSelector',
   SetupWizard = 'SetupWizard',
+  SubscriptionGate = 'SubscriptionGate',
 }
 
 export default defineComponent({
@@ -90,6 +96,7 @@ export default defineComponent({
     SetupWizard,
     DatabaseSelector,
     WindowsTitleBar,
+    SubscriptionGate,
   },
   setup() {
     const keys = useKeys();
@@ -147,6 +154,11 @@ export default defineComponent({
   },
   methods: {
     async setInitialScreen(): Promise<void> {
+      const tokenInfo = await ipc.getStoredToken();
+      if (!tokenInfo.valid && !tokenInfo.withinGrace) {
+        this.activeScreen = Screen.SubscriptionGate;
+        return;
+      }
       const lastSelectedFilePath = fyo.config.get('lastSelectedFilePath', null);
 
       if (
@@ -158,6 +170,9 @@ export default defineComponent({
       }
 
       await this.fileSelected(lastSelectedFilePath);
+    },
+    async subscriptionVerified(): Promise<void> {
+      await this.setInitialScreen();
     },
     async setSearcher(): Promise<void> {
       this.searcher = new Search(fyo);

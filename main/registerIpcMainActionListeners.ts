@@ -11,11 +11,11 @@ import { constants } from 'fs';
 import fs from 'fs-extra';
 import path from 'path';
 import { SelectFileOptions, SelectFileReturn } from 'utils/types';
-import databaseManager from '../backend/database/manager';
-import { emitMainProcessError } from '../backend/helpers';
-import { Main } from '../main';
-import { DatabaseMethod } from '../utils/db/types';
-import { IPC_ACTIONS } from '../utils/messages';
+import databaseManager from 'backend/database/manager';
+import { emitMainProcessError } from 'backend/helpers';
+import { Main } from 'main';
+import { DatabaseMethod } from 'utils/db/types';
+import { IPC_ACTIONS } from 'utils/messages';
 import { getUrlAndTokenString, sendError } from './contactMothership';
 import { getLanguageMap } from './getLanguageMap';
 import { getTemplates } from './getPrintTemplates';
@@ -29,6 +29,15 @@ import {
 import { saveHtmlAsPdf } from './saveHtmlAsPdf';
 import { sendAPIRequest } from './api';
 import { initScheduler } from './initSheduler';
+import config from 'utils/config';
+import verifyTokenWithServer, {
+  storeToken,
+  retrieveToken,
+  clearToken,
+  setLastVerifiedAt,
+  isWithinGracePeriod,
+  syncDatabaseToServer,
+} from './subscription';
 
 export default function registerIpcMainActionListeners(main: Main) {
   ipcMain.handle(IPC_ACTIONS.CHECK_DB_ACCESS, async (_, filePath: string) => {
@@ -253,10 +262,53 @@ export default function registerIpcMainActionListeners(main: Main) {
 
   ipcMain.handle(
     IPC_ACTIONS.SEND_API_REQUEST,
-    async (e, endpoint: string, options: RequestInit | undefined) => {
+    async (_, endpoint: string, options: any) => {
       return sendAPIRequest(endpoint, options);
     }
   );
+
+  /**
+   * Subscription Related Actions
+   */
+
+  ipcMain.handle(IPC_ACTIONS.VERIFY_SUBSCRIPTION, async (_, token: string) => {
+    const result = await verifyTokenWithServer(token);
+    if (result.valid) {
+      storeToken(token);
+      setLastVerifiedAt();
+    }
+    return result;
+  });
+
+  ipcMain.handle(IPC_ACTIONS.GET_STORED_TOKEN, async () => {
+    const token = retrieveToken();
+    if (!token) {
+      return { token: null, valid: false, email: '', withinGrace: false };
+    }
+
+    const result = await verifyTokenWithServer(token);
+    if (result.valid) {
+      setLastVerifiedAt();
+      return { token, valid: true, email: result.email, withinGrace: false };
+    }
+
+    // Token stored but server says invalid — check grace period
+    const withinGrace = isWithinGracePeriod();
+    return { token, valid: false, email: '', withinGrace };
+  });
+
+  ipcMain.handle(IPC_ACTIONS.CLEAR_SUB_TOKEN, () => {
+    clearToken();
+  });
+
+  ipcMain.handle(IPC_ACTIONS.SYNC_DB_NOW, async () => {
+    const token = retrieveToken();
+    const dbPath = config.get('lastSelectedFilePath');
+    if (!token || !dbPath) {
+      return { success: false, message: 'No token or database path available' };
+    }
+    return await syncDatabaseToServer(dbPath, token);
+  });
 
   /**
    * Database Related Actions

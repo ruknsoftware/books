@@ -170,6 +170,28 @@
           gap-1
           items-center
         "
+        @click="syncDatabaseManual"
+      >
+        <feather-icon
+          name="refresh-cw"
+          class="h-4 w-4 flex-shrink-0"
+          :class="{ 'animate-spin': isSyncing }"
+        />
+        <p>
+          {{ isSyncing ? t`Syncing...` : t`Sync Database` }}
+        </p>
+      </button>
+
+      <button
+        class="
+          flex
+          text-sm text-gray-600
+          dark:text-gray-500
+          hover:text-gray-800
+          dark:hover:text-gray-400
+          gap-1
+          items-center
+        "
         @click="() => reportIssue()"
       >
         <feather-icon name="flag" class="h-4 w-4 flex-shrink-0" />
@@ -221,6 +243,7 @@ import { docsPathRef } from 'src/utils/refs';
 import { getSidebarConfig } from 'src/utils/sidebarConfig';
 import { SidebarConfig, SidebarItem, SidebarRoot } from 'src/utils/types';
 import { routeTo, toggleSidebar } from 'src/utils/ui';
+import { showToast } from 'src/utils/interactive';
 import { defineComponent, inject } from 'vue';
 import router from '../router';
 import Icon from './Icon.vue';
@@ -252,12 +275,14 @@ export default defineComponent({
       viewShortcuts: false,
       activeGroup: null,
       showDevMode: false,
+      isSyncing: false,
     } as {
       companyName: string;
       groups: SidebarConfig;
       viewShortcuts: boolean;
       activeGroup: null | SidebarRoot;
       showDevMode: boolean;
+      isSyncing: boolean;
     };
   },
   computed: {
@@ -347,6 +372,31 @@ export default defineComponent({
       }
 
       return { path, query: { filters: JSON.stringify(filters) } };
+    },
+    async syncDatabaseManual() {
+      if (this.isSyncing) return;
+      this.isSyncing = true;
+      try {
+        const res = await ipc.syncDbNow();
+        if (res.success) {
+          showToast({
+            message: this.t`Database synced to the server successfully.`,
+            type: 'success',
+          });
+        } else {
+          showToast({
+            message: res.message || this.t`Failed to sync database.`,
+            type: 'error',
+          });
+        }
+      } catch (err) {
+        showToast({
+          message: this.t`Connection failed.`,
+          type: 'error',
+        });
+      } finally {
+        this.isSyncing = false;
+      }
     },
   },
 });
