@@ -30,48 +30,58 @@ function getDatabaseSyncInterval(): string {
 
 async function runDatabaseSyncWithRetry(): Promise<void> {
   const { default: pRetry, AbortError } = await getPRetry();
-  await pRetry(
-    async () => {
-      // Validity gate: require both a stored token and an in-grace verified subscription.
-      const token = retrieveToken();
-      if (!token || !isWithinGracePeriod()) {
+  try {
+    await pRetry(
+      async () => {
+        // Validity gate: require both a stored token and an in-grace verified subscription.
+        const token = retrieveToken();
+        if (!token || !isWithinGracePeriod()) {
+          databaseSyncFailureCount = 0;
+          throw new AbortError(
+            '[Sync] Skipping scheduled database sync (no valid token / outside grace period)'
+          );
+        }
+
+        const backupPath = await databaseManager.createBackup();
+        if (!backupPath) {
+          throw new AbortError(
+            '[Sync] Skipping scheduled database sync (no active database)'
+          );
+        }
+
+        const result = await syncDatabaseToServer(backupPath, token);
+        if (!result?.success) {
+          throw new Error(result?.message || 'Database sync failed');
+        }
+
         databaseSyncFailureCount = 0;
-        throw new AbortError(
-          '[Sync] Skipping scheduled database sync (no valid token / outside grace period)'
-        );
-      }
-
-
-      const backupPath = await databaseManager.createBackup();
-      if (!backupPath) {
-        throw new AbortError(
-          '[Sync] Skipping scheduled database sync (no active database)'
-        );
-      }
-
-      const result = await syncDatabaseToServer(backupPath, token);
-      if (!result?.success) {
-        throw new Error(result?.message || 'Database sync failed');
-      }
-
-      databaseSyncFailureCount = 0;
-    },
-    {
-      // Keep retrying on transient failures with exponential backoff + jitter.
-      retries: 5,
-      factor: 2,
-      minTimeout: 30_000,
-      maxTimeout: 30 * 60_000,
-      randomize: true,
-      onFailedAttempt: (err) => {
-        databaseSyncFailureCount = err.attemptNumber;
-        emitMainProcessError(err);
-        console.log(
-          `[Sync] Database sync failed (attempt ${databaseSyncFailureCount}); retrying...`
-        );
       },
+      {
+        // Keep retrying on transient failures with exponential backoff + jitter.
+        retries: 5,
+        factor: 2,
+        minTimeout: 30_000,
+        maxTimeout: 30 * 60_000,
+        randomize: true,
+        onFailedAttempt: (err) => {
+          databaseSyncFailureCount = err.attemptNumber;
+          emitMainProcessError(err);
+          console.log(
+            `[Sync] Database sync failed (attempt ${databaseSyncFailureCount}); retrying...`
+          );
+        },
+      }
+    );
+  } catch (err) {
+    // AbortError is used for "skip" gates and should not be treated as a failure.
+    if (err instanceof AbortError) {
+      return;
     }
-  );
+
+    emitMainProcessError(err);
+    databaseSyncFailureCount = Math.max(databaseSyncFailureCount, 1);
+    console.log('[Sync] Database sync failed after retries; giving up.');
+  }
 }
 
 export async function initScheduler(interval: string) {
