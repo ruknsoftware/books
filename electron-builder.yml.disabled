@@ -1,5 +1,5 @@
-productName: Frappe Books
-appId: io.frappe.books
+productName: RUKN Books
+appId: sh.rukn.books
 asarUnpack: '**/*.node'
 extraResources:
   [
@@ -12,7 +12,7 @@ mac:
   category: public.app-category.finance
   icon: build/icon.png
   # notarize:
-  #   appBundleId: io.frappe.books
+  #   appBundleId: sh.rukn.books
   hardenedRuntime: true
   gatekeeperAssess: false
   darkModeSupport: false
@@ -21,7 +21,7 @@ mac:
   publish:
     - github
 win:
-  publisherName: Frappe Technologies Pvt. Ltd.
+  publisherName: RUKN Software
   signDlls: true
   icon: build/icon.ico
   publish:
