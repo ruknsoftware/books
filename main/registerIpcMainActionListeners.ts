@@ -303,11 +303,11 @@ export default function registerIpcMainActionListeners(main: Main) {
 
   ipcMain.handle(IPC_ACTIONS.SYNC_DB_NOW, async () => {
     const token = retrieveToken();
-    const dbPath = config.get('lastSelectedFilePath');
-    if (!token || !dbPath) {
+    const backupPath = await databaseManager.createBackup();
+    if (!token || !backupPath) {
       return { success: false, message: 'No token or database path available' };
     }
-    return await syncDatabaseToServer(dbPath, token);
+    return await syncDatabaseToServer(backupPath, token);
   });
 
   /**

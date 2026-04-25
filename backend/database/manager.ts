@@ -179,19 +179,28 @@ export class DatabaseManager extends DatabaseDemuxBase {
     return !query.length;
   }
 
-  async #createBackup() {
+  /**
+   * Create a backup using the standard Books backup naming/location.
+   * Returns the backup path, or null if backup could not be created.
+   */
+  async createBackup(): Promise<string | null> {
     const { dbPath } = this.db ?? {};
     if (!dbPath || process.env.IS_TEST) {
-      return;
+      return null;
     }
 
     const backupPath = await this.#getBackupFilePath();
     if (!backupPath) {
-      return;
+      return null;
     }
 
     const db = this.getDriver();
     await db?.backup(backupPath).then(() => db.close());
+    return backupPath;
+  }
+
+  async #createBackup() {
+    await this.createBackup();
   }
 
   async #getBackupFilePath() {

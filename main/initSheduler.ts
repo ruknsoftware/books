@@ -10,6 +10,7 @@ import {
 } from './subscription';
 import { emitMainProcessError } from 'backend/helpers';
 import pRetry, { AbortError } from 'p-retry';
+import databaseManager from 'backend/database/manager';
 
 let bree: Bree;
 let inFlightDatabaseSync: Promise<void> | null = null;
@@ -34,15 +35,15 @@ async function runDatabaseSyncWithRetry(): Promise<void> {
         );
       }
 
-      const dbPath = config.get('lastSelectedFilePath' as never) as unknown;
-      if (typeof dbPath !== 'string' || !dbPath.trim()) {
-        databaseSyncFailureCount = 0;
+
+      const backupPath = await databaseManager.createBackup();
+      if (!backupPath) {
         throw new AbortError(
-          '[Sync] Skipping scheduled database sync (no database path selected)'
+          '[Sync] Skipping scheduled database sync (no active database)'
         );
       }
 
-      const result = await syncDatabaseToServer(dbPath, token);
+      const result = await syncDatabaseToServer(backupPath, token);
       if (!result?.success) {
         throw new Error(result?.message || 'Database sync failed');
       }
