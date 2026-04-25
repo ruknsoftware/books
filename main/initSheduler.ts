@@ -126,6 +126,15 @@ export async function initScheduler(interval: string) {
           },
         },
       },
+      {
+        name: 'cleanupBackups',
+        interval: '24 hours',
+        worker: {
+          workerData: {
+            useTsNode: true,
+          },
+        },
+      },
     ],
     worker: {
       argv: ['--require', 'ts-node/register'],
