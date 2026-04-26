@@ -1,6 +1,7 @@
 import { safeStorage } from 'electron';
 import config from 'utils/config';
 import fetch from 'node-fetch';
+import type { Response } from 'node-fetch';
 import { randomBytes } from 'crypto';
 import { SUBSCRIPTION_FEATURE_SERVER_MAP } from 'utils/subscriptionFeatures';
 
@@ -10,21 +11,80 @@ const SUBSCRIPTION_SERVER =
     : 'https://books.rukn.sh';
 export const GRACE_PERIOD_DAYS = 1;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+async function getErrorMessageFromResponse(res: Response): Promise<string> {
+  try {
+    const raw = await res.text();
+    const t = raw.trim();
+
+    let obj: Record<string, unknown> | null = null;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      obj = isRecord(parsed) ? parsed : null;
+    } catch {
+      // ignore
+    }
+
+    // Common Frappe/ERPNext error shapes:
+    // - { exception: "...", exc: "...", _error_message: "..." }
+    // - { message: "..." } or { message: { ... } }
+    // - { _server_messages: '["..."]' }
+    const errMsg = obj?._error_message;
+    if (typeof errMsg === 'string' && errMsg) {
+      return errMsg;
+    }
+
+    const msg = obj?.message;
+    if (typeof msg === 'string' && msg) {
+      return msg;
+    }
+
+    const exc = obj?.exception;
+    if (typeof exc === 'string' && exc) {
+      return exc;
+    }
+
+    const rawServerMessages = obj?._server_messages;
+    if (typeof rawServerMessages === 'string' && rawServerMessages) {
+      try {
+        const msgs = JSON.parse(rawServerMessages) as unknown;
+        if (Array.isArray(msgs) && typeof msgs[0] === 'string' && msgs[0]) {
+          return msgs[0];
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (t) {
+      return t.slice(0, 200);
+    }
+  } catch {
+    // ignore
+  }
+
+  return `Server returned ${res.status}`;
+}
+
 /**
  * Call the Rukn server to verify the API token.
  * Token format: "api_key:api_secret"
  */
-async function verifyTokenWithServer(
-  token: string
-): Promise<{
+async function verifyTokenWithServer(token: string): Promise<{
   valid: boolean;
   email: string;
   message: string;
   features?: Record<string, boolean>;
 }> {
   try {
+    const instanceId = getInstanceId();
     const res = await fetch(
-      `${SUBSCRIPTION_SERVER}/api/method/rukn_books_subscription.api.validate_api_token`,
+      `${SUBSCRIPTION_SERVER}/api/method/rukn_books_subscription.api.validate_api_token?instance_id=${encodeURIComponent(
+        instanceId
+      )}`,
       {
         method: 'GET',
         headers: {
@@ -42,7 +102,8 @@ async function verifyTokenWithServer(
         email = docname;
         if (docname) config.set('subscriptionDocname', docname);
 
-        const doctype = typeof msgData.doctype === 'string' ? msgData.doctype : '';
+        const doctype =
+          typeof msgData.doctype === 'string' ? msgData.doctype : '';
         if (doctype) config.set('subscriptionDoctype', doctype);
 
         // Optional feature-flags payload from subscription settings.
@@ -75,8 +136,12 @@ async function verifyTokenWithServer(
       return { valid: true, email, message: 'OK', features };
     }
 
-    // 401 or other status
-    return { valid: false, email: '', message: 'Invalid or expired token' };
+    const serverMsg = await getErrorMessageFromResponse(res);
+    return {
+      valid: false,
+      email: '',
+      message: serverMsg || 'Invalid or expired token',
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { valid: false, email: '', message: `Connection error: ${msg}` };
@@ -128,8 +193,10 @@ export function getInstanceId(): string {
   let id = config.get('subscriptionInstanceId');
   if (id) return id;
 
-  // Generate a short random ID like "abc123-de456fg7"
-  id = randomBytes(8).toString('hex').replace(/(.{6})/, '$1-');
+  // Generate a short random ID like "abc123-def4567890" (16 hex chars split 6-10)
+  id = randomBytes(8)
+    .toString('hex')
+    .replace(/(.{6})/, '$1-');
   config.set('subscriptionInstanceId', id);
   return id;
 }
@@ -168,7 +235,7 @@ export async function syncDatabaseToServer(
   if (isSyncing) {
     return { success: false, message: 'Sync already in progress' };
   }
-  
+
   isSyncing = true;
   try {
     const fs = await import('fs-extra');
@@ -180,13 +247,13 @@ export async function syncDatabaseToServer(
 
     let fileToSync = dbPath;
     const backupFolder = path.join(path.dirname(dbPath), 'backups');
-    
+
     if (await fs.pathExists(backupFolder)) {
       let baseName = path.parse(dbPath).name;
       if (baseName.endsWith('.books')) {
         baseName = baseName.slice(0, -6);
       }
-      
+
       const files = await fs.readdir(backupFolder);
       let latestBackup = '';
       let latestTime = 0;
@@ -212,39 +279,42 @@ export async function syncDatabaseToServer(
     const fileBuffer = await fs.readFile(fileToSync);
 
     // Build multipart/form-data manually
-    const boundary = `----BooksSync${Date.now()}${randomBytes(4).toString('hex')}`;
+    const boundary = `----BooksSync${Date.now()}${randomBytes(4).toString(
+      'hex'
+    )}`;
     const CRLF = '\r\n';
 
     const textFields: Record<string, string> = {
       is_private: '1',
       folder: 'Home/Attachments',
-      doctype: config.get('subscriptionDoctype') || 'Books Subscription Settings',
+      doctype:
+        config.get('subscriptionDoctype') || 'Books Subscription Settings',
       docname: config.get('subscriptionDocname') || '',
     };
 
-  const parts: Buffer[] = [];
+    const parts: Buffer[] = [];
 
-  // Text fields
-  for (const [key, value] of Object.entries(textFields)) {
+    // Text fields
+    for (const [key, value] of Object.entries(textFields)) {
+      parts.push(
+        Buffer.from(
+          `--${boundary}${CRLF}` +
+            `Content-Disposition: form-data; name="${key}"${CRLF}${CRLF}` +
+            `${value}${CRLF}`
+        )
+      );
+    }
+
+    // File field
     parts.push(
       Buffer.from(
         `--${boundary}${CRLF}` +
-          `Content-Disposition: form-data; name="${key}"${CRLF}${CRLF}` +
-          `${value}${CRLF}`
+          `Content-Disposition: form-data; name="file"; filename="${fileName}"${CRLF}` +
+          `Content-Type: application/octet-stream${CRLF}${CRLF}`
       )
     );
-  }
-
-  // File field
-  parts.push(
-    Buffer.from(
-      `--${boundary}${CRLF}` +
-        `Content-Disposition: form-data; name="file"; filename="${fileName}"${CRLF}` +
-        `Content-Type: application/octet-stream${CRLF}${CRLF}`
-    )
-  );
-  parts.push(fileBuffer);
-  parts.push(Buffer.from(`${CRLF}--${boundary}--${CRLF}`));
+    parts.push(fileBuffer);
+    parts.push(Buffer.from(`${CRLF}--${boundary}--${CRLF}`));
 
     const body = Buffer.concat(parts as unknown as Uint8Array[]);
 
