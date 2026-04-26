@@ -193,7 +193,7 @@ export function getInstanceId(): string {
   let id = config.get('subscriptionInstanceId');
   if (id) return id;
 
-  // Generate a short random ID like "abc123-de456fg7"
+  // Generate a short random ID like "abc123-def4567890" (16 hex chars split 6-10)
   id = randomBytes(8)
     .toString('hex')
     .replace(/(.{6})/, '$1-');
