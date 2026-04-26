@@ -17,47 +17,48 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 async function getErrorMessageFromResponse(res: Response): Promise<string> {
   try {
-    const contentType = res.headers.get('content-type') || '';
-    const isJson = contentType.includes('application/json');
+    const raw = await res.text();
+    const t = raw.trim();
 
-    if (isJson) {
-      const body: unknown = await res.json();
-      const obj = isRecord(body) ? body : null;
+    let obj: Record<string, unknown> | null = null;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      obj = isRecord(parsed) ? parsed : null;
+    } catch {
+      // ignore
+    }
 
-      // Common Frappe/ERPNext error shapes:
-      // - { exception: "...", exc: "...", _error_message: "..." }
-      // - { message: "..." } or { message: { ... } }
-      // - { _server_messages: '["..."]' }
-      const errMsg = obj?._error_message;
-      if (typeof errMsg === 'string' && errMsg) {
-        return errMsg;
-      }
+    // Common Frappe/ERPNext error shapes:
+    // - { exception: "...", exc: "...", _error_message: "..." }
+    // - { message: "..." } or { message: { ... } }
+    // - { _server_messages: '["..."]' }
+    const errMsg = obj?._error_message;
+    if (typeof errMsg === 'string' && errMsg) {
+      return errMsg;
+    }
 
-      const msg = obj?.message;
-      if (typeof msg === 'string' && msg) {
-        return msg;
-      }
+    const msg = obj?.message;
+    if (typeof msg === 'string' && msg) {
+      return msg;
+    }
 
-      const exc = obj?.exception;
-      if (typeof exc === 'string' && exc) {
-        return exc;
-      }
+    const exc = obj?.exception;
+    if (typeof exc === 'string' && exc) {
+      return exc;
+    }
 
-      const rawServerMessages = obj?._server_messages;
-      if (typeof rawServerMessages === 'string' && rawServerMessages) {
-        try {
-          const msgs = JSON.parse(rawServerMessages) as unknown;
-          if (Array.isArray(msgs) && typeof msgs[0] === 'string' && msgs[0]) {
-            return msgs[0];
-          }
-        } catch {
-          // ignore
+    const rawServerMessages = obj?._server_messages;
+    if (typeof rawServerMessages === 'string' && rawServerMessages) {
+      try {
+        const msgs = JSON.parse(rawServerMessages) as unknown;
+        if (Array.isArray(msgs) && typeof msgs[0] === 'string' && msgs[0]) {
+          return msgs[0];
         }
+      } catch {
+        // ignore
       }
     }
 
-    const text = await res.text();
-    const t = text.trim();
     if (t) {
       return t.slice(0, 200);
     }
