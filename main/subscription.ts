@@ -14,17 +14,18 @@ export const GRACE_PERIOD_DAYS = 1;
  * Call the Rukn server to verify the API token.
  * Token format: "api_key:api_secret"
  */
-async function verifyTokenWithServer(
-  token: string
-): Promise<{
+async function verifyTokenWithServer(token: string): Promise<{
   valid: boolean;
   email: string;
   message: string;
   features?: Record<string, boolean>;
 }> {
   try {
+    const instanceId = getInstanceId();
     const res = await fetch(
-      `${SUBSCRIPTION_SERVER}/api/method/rukn_books_subscription.api.validate_api_token`,
+      `${SUBSCRIPTION_SERVER}/api/method/rukn_books_subscription.api.validate_api_token?instance_id=${encodeURIComponent(
+        instanceId
+      )}`,
       {
         method: 'GET',
         headers: {
@@ -42,7 +43,8 @@ async function verifyTokenWithServer(
         email = docname;
         if (docname) config.set('subscriptionDocname', docname);
 
-        const doctype = typeof msgData.doctype === 'string' ? msgData.doctype : '';
+        const doctype =
+          typeof msgData.doctype === 'string' ? msgData.doctype : '';
         if (doctype) config.set('subscriptionDoctype', doctype);
 
         // Optional feature-flags payload from subscription settings.
@@ -129,7 +131,9 @@ export function getInstanceId(): string {
   if (id) return id;
 
   // Generate a short random ID like "abc123-de456fg7"
-  id = randomBytes(8).toString('hex').replace(/(.{6})/, '$1-');
+  id = randomBytes(8)
+    .toString('hex')
+    .replace(/(.{6})/, '$1-');
   config.set('subscriptionInstanceId', id);
   return id;
 }
@@ -168,7 +172,7 @@ export async function syncDatabaseToServer(
   if (isSyncing) {
     return { success: false, message: 'Sync already in progress' };
   }
-  
+
   isSyncing = true;
   try {
     const fs = await import('fs-extra');
@@ -180,13 +184,13 @@ export async function syncDatabaseToServer(
 
     let fileToSync = dbPath;
     const backupFolder = path.join(path.dirname(dbPath), 'backups');
-    
+
     if (await fs.pathExists(backupFolder)) {
       let baseName = path.parse(dbPath).name;
       if (baseName.endsWith('.books')) {
         baseName = baseName.slice(0, -6);
       }
-      
+
       const files = await fs.readdir(backupFolder);
       let latestBackup = '';
       let latestTime = 0;
@@ -212,39 +216,42 @@ export async function syncDatabaseToServer(
     const fileBuffer = await fs.readFile(fileToSync);
 
     // Build multipart/form-data manually
-    const boundary = `----BooksSync${Date.now()}${randomBytes(4).toString('hex')}`;
+    const boundary = `----BooksSync${Date.now()}${randomBytes(4).toString(
+      'hex'
+    )}`;
     const CRLF = '\r\n';
 
     const textFields: Record<string, string> = {
       is_private: '1',
       folder: 'Home/Attachments',
-      doctype: config.get('subscriptionDoctype') || 'Books Subscription Settings',
+      doctype:
+        config.get('subscriptionDoctype') || 'Books Subscription Settings',
       docname: config.get('subscriptionDocname') || '',
     };
 
-  const parts: Buffer[] = [];
+    const parts: Buffer[] = [];
 
-  // Text fields
-  for (const [key, value] of Object.entries(textFields)) {
+    // Text fields
+    for (const [key, value] of Object.entries(textFields)) {
+      parts.push(
+        Buffer.from(
+          `--${boundary}${CRLF}` +
+            `Content-Disposition: form-data; name="${key}"${CRLF}${CRLF}` +
+            `${value}${CRLF}`
+        )
+      );
+    }
+
+    // File field
     parts.push(
       Buffer.from(
         `--${boundary}${CRLF}` +
-          `Content-Disposition: form-data; name="${key}"${CRLF}${CRLF}` +
-          `${value}${CRLF}`
+          `Content-Disposition: form-data; name="file"; filename="${fileName}"${CRLF}` +
+          `Content-Type: application/octet-stream${CRLF}${CRLF}`
       )
     );
-  }
-
-  // File field
-  parts.push(
-    Buffer.from(
-      `--${boundary}${CRLF}` +
-        `Content-Disposition: form-data; name="file"; filename="${fileName}"${CRLF}` +
-        `Content-Type: application/octet-stream${CRLF}${CRLF}`
-    )
-  );
-  parts.push(fileBuffer);
-  parts.push(Buffer.from(`${CRLF}--${boundary}--${CRLF}`));
+    parts.push(fileBuffer);
+    parts.push(Buffer.from(`${CRLF}--${boundary}--${CRLF}`));
 
     const body = Buffer.concat(parts as unknown as Uint8Array[]);
 
