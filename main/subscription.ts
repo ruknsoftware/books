@@ -1,6 +1,7 @@
 import { safeStorage } from 'electron';
 import config from 'utils/config';
 import fetch from 'node-fetch';
+import type { Response } from 'node-fetch';
 import { randomBytes } from 'crypto';
 import { SUBSCRIPTION_FEATURE_SERVER_MAP } from 'utils/subscriptionFeatures';
 
@@ -9,6 +10,63 @@ const SUBSCRIPTION_SERVER =
     ? 'http://localhost:8001'
     : 'https://books.rukn.sh';
 export const GRACE_PERIOD_DAYS = 1;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+async function getErrorMessageFromResponse(res: Response): Promise<string> {
+  try {
+    const contentType = res.headers.get('content-type') || '';
+    const isJson = contentType.includes('application/json');
+
+    if (isJson) {
+      const body: unknown = await res.json();
+      const obj = isRecord(body) ? body : null;
+
+      // Common Frappe/ERPNext error shapes:
+      // - { exception: "...", exc: "...", _error_message: "..." }
+      // - { message: "..." } or { message: { ... } }
+      // - { _server_messages: '["..."]' }
+      const errMsg = obj?._error_message;
+      if (typeof errMsg === 'string' && errMsg) {
+        return errMsg;
+      }
+
+      const msg = obj?.message;
+      if (typeof msg === 'string' && msg) {
+        return msg;
+      }
+
+      const exc = obj?.exception;
+      if (typeof exc === 'string' && exc) {
+        return exc;
+      }
+
+      const rawServerMessages = obj?._server_messages;
+      if (typeof rawServerMessages === 'string' && rawServerMessages) {
+        try {
+          const msgs = JSON.parse(rawServerMessages) as unknown;
+          if (Array.isArray(msgs) && typeof msgs[0] === 'string' && msgs[0]) {
+            return msgs[0];
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    const text = await res.text();
+    const t = text.trim();
+    if (t) {
+      return t.slice(0, 200);
+    }
+  } catch {
+    // ignore
+  }
+
+  return `Server returned ${res.status}`;
+}
 
 /**
  * Call the Rukn server to verify the API token.
@@ -77,8 +135,12 @@ async function verifyTokenWithServer(token: string): Promise<{
       return { valid: true, email, message: 'OK', features };
     }
 
-    // 401 or other status
-    return { valid: false, email: '', message: 'Invalid or expired token' };
+    const serverMsg = await getErrorMessageFromResponse(res);
+    return {
+      valid: false,
+      email: '',
+      message: serverMsg || 'Invalid or expired token',
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { valid: false, email: '', message: `Connection error: ${msg}` };
