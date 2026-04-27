@@ -346,7 +346,7 @@ export default defineComponent({
       groups: [],
       viewShortcuts: false,
       activeGroup: null,
-      showDevMode: true,
+      showDevMode: fyo.store.isDevelopment,
       isSyncing: false,
       showReportIssue: false,
       reportIssueTitle: '',
@@ -375,7 +375,7 @@ export default defineComponent({
       }
     });
 
-    this.showDevMode = this.fyo.store.isDevelopment;
+    this.showDevMode = fyo.store.isDevelopment;
   },
   unmounted() {
     this.shortcuts?.delete(COMPONENT_NAME);
