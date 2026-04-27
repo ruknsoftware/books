@@ -186,9 +186,9 @@ export class Item extends Doc {
 
   validations: ValidationMap = {
     barcode: (value: DocValue) => {
-      if (value && !(value as string).match(/^\d{12}$/)) {
+      if (value && !(value as string).match(/^\d+$/)) {
         throw new ValidationError(
-          this.fyo.t`Barcode must be exactly 12 digits.`
+          this.fyo.t`Barcode must contain only digits.`
         );
       }
     },
