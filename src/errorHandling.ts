@@ -245,7 +245,7 @@ export function getFeatureFlags(): string[] {
     : [];
 }
 
-function getIssueUrlQuery(errorLogObj?: ErrorLog): string {
+function buildIssueReportBody(errorLogObj?: ErrorLog): string {
   const body: string[] = [];
 
   if (errorLogObj) {
@@ -279,7 +279,7 @@ export async function reportIssue(errorLogObj?: ErrorLog) {
     ? `${errorLogObj.name}: ${truncate(errorLogObj.message ?? '', { length: 80 })}`
     : t`Report Issue`;
 
-  const logs = getIssueUrlQuery(errorLogObj);
+  const logs = buildIssueReportBody(errorLogObj);
 
   const detail = t`This will send the issue report to your subscription server.`;
   const confirmed = await showDialog({
