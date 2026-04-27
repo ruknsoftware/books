@@ -251,7 +251,7 @@ function buildIssueReportBody(errorLogObj?: ErrorLog): string {
   if (errorLogObj) {
     body.push(`Error: ${errorLogObj.name}: ${errorLogObj.message}`, '');
   } else {
-    body.push('User report', '');
+    body.push(t`User report`, '');
   }
 
   if (errorLogObj?.stack) {
@@ -306,7 +306,9 @@ export async function reportIssue(errorLogObj?: ErrorLog) {
 
   const res = await ipc.reportIssue({
     title: String(title),
-    description: errorLogObj?.message ? String(errorLogObj.message) : 'User report',
+    description: errorLogObj?.message
+      ? String(errorLogObj.message)
+      : t`User report`,
     instance_id: fyo.store.instanceId,
     app_version: fyo.store.appVersion,
     platform: fyo.store.platform,
